@@ -10,6 +10,7 @@ export type FormaPagamento = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | '
 export type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
 export type TipoConta = 'pagar' | 'receber'
 export type StatusConta = 'pendente' | 'pago' | 'cancelado'
+export type StatusProducao = 'planejado' | 'concluido' | 'cancelado'
 
 export type Produto = {
   id: string
@@ -109,6 +110,59 @@ export type ContaFinanceiraInsert = {
 
 export type ContaFinanceiraUpdate = Partial<ContaFinanceiraInsert>
 
+export type Receita = {
+  id: string
+  produto_id: string
+  nome: string
+  rendimento: number
+  modo_preparo: string | null
+  created_at: string
+}
+
+export type ReceitaInsert = {
+  produto_id: string
+  nome: string
+  rendimento: number
+  modo_preparo?: string | null
+}
+
+export type ReceitaUpdate = Partial<ReceitaInsert>
+
+export type ReceitaItem = {
+  id: string
+  receita_id: string
+  ingrediente_id: string
+  quantidade: number
+}
+
+export type ReceitaItemInsert = {
+  receita_id: string
+  ingrediente_id: string
+  quantidade: number
+}
+
+export type ReceitaItemUpdate = Partial<ReceitaItemInsert>
+
+export type Producao = {
+  id: string
+  receita_id: string
+  data: string
+  status: StatusProducao
+  observacoes: string | null
+  created_at: string
+  created_by: string | null
+  concluida_em: string | null
+}
+
+export type ProducaoInsert = {
+  receita_id: string
+  data: string
+  status?: StatusProducao
+  observacoes?: string | null
+}
+
+export type ProducaoUpdate = Partial<ProducaoInsert>
+
 export type Database = {
   public: {
     Tables: {
@@ -142,6 +196,24 @@ export type Database = {
         Update: ContaFinanceiraUpdate
         Relationships: []
       }
+      receitas: {
+        Row: Receita
+        Insert: ReceitaInsert
+        Update: ReceitaUpdate
+        Relationships: []
+      }
+      receita_itens: {
+        Row: ReceitaItem
+        Insert: ReceitaItemInsert
+        Update: ReceitaItemUpdate
+        Relationships: []
+      }
+      producoes: {
+        Row: Producao
+        Insert: ProducaoInsert
+        Update: ProducaoUpdate
+        Relationships: []
+      }
     }
     Views: Record<string, never>
     Functions: {
@@ -160,6 +232,12 @@ export type Database = {
           p_forma_pagamento: FormaPagamento
         }
         Returns: string
+      }
+      concluir_producao: {
+        Args: {
+          p_producao_id: string
+        }
+        Returns: void
       }
     }
   }

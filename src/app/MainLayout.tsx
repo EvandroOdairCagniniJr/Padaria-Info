@@ -17,9 +17,8 @@ const navItems = [
   { to: '/estoque', label: 'Estoque', icon: Warehouse },
   { to: '/pdv', label: 'PDV', icon: ShoppingCart },
   { to: '/financeiro', label: 'Financeiro', icon: Wallet },
+  { to: '/producao', label: 'Produção', icon: ChefHat },
 ]
-
-const comingSoonItems = [{ label: 'Produção', icon: ChefHat }]
 
 export function MainLayout() {
   const { user, signOut } = useAuth()
@@ -50,21 +49,6 @@ export function MainLayout() {
               {item.label}
             </NavLink>
           ))}
-
-          <div className="pt-2">
-            {comingSoonItems.map((item) => (
-              <div
-                key={item.label}
-                className="flex cursor-not-allowed items-center justify-between gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground/50"
-              >
-                <span className="flex items-center gap-2">
-                  <item.icon className="size-4" />
-                  {item.label}
-                </span>
-                <span className="text-[10px] uppercase tracking-wide">em breve</span>
-              </div>
-            ))}
-          </div>
         </nav>
 
         <div className="border-t p-3">

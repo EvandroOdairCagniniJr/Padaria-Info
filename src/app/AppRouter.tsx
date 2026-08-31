@@ -7,6 +7,7 @@ import { ProdutosPage } from '@/features/produtos/ProdutosPage'
 import { EstoquePage } from '@/features/estoque/EstoquePage'
 import { PdvPage } from '@/features/pdv/PdvPage'
 import { FinanceiroPage } from '@/features/financeiro/FinanceiroPage'
+import { ProducaoPage } from '@/features/producao/ProducaoPage'
 
 export function AppRouter() {
   return (
@@ -21,6 +22,7 @@ export function AppRouter() {
             <Route path="estoque" element={<EstoquePage />} />
             <Route path="pdv" element={<PdvPage />} />
             <Route path="financeiro" element={<FinanceiroPage />} />
+            <Route path="producao" element={<ProducaoPage />} />
           </Route>
         </Route>
       </Routes>

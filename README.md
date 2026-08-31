@@ -13,8 +13,6 @@ Concluídos:
 - Estoque (entradas, saídas e ajustes)
 - PDV (venda rápida no balcão)
 - Financeiro (contas a pagar/receber, fluxo de caixa)
-
-Planejado para próxima fase:
 - Produção/Receitas (ficha técnica, planejamento de produção)
 
 ## Configuração
@@ -44,6 +42,7 @@ No painel do Supabase, abra o **SQL Editor** e execute, em ordem, o conteúdo do
 1. `0001_schema.sql` — cria as tabelas e as políticas de acesso (RLS)
 2. `0002_functions.sql` — cria as funções que registram movimentações de estoque e finalizam vendas
 3. `0003_financeiro.sql` — cria a tabela de contas a pagar/receber
+4. `0004_producao.sql` — cria as tabelas de receitas/ingredientes e planejamento de produção, e a função que conclui uma produção
 
 (Alternativamente, se preferir usar o Supabase CLI: `supabase db push`.)
 
