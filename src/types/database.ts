@@ -8,6 +8,8 @@
 
 export type FormaPagamento = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix'
 export type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
+export type TipoConta = 'pagar' | 'receber'
+export type StatusConta = 'pendente' | 'pago' | 'cancelado'
 
 export type Produto = {
   id: string
@@ -78,6 +80,35 @@ export type VendaItem = {
 
 export type VendaItemInsert = Omit<VendaItem, 'id'>
 
+export type ContaFinanceira = {
+  id: string
+  tipo: TipoConta
+  descricao: string
+  categoria: string | null
+  valor: number
+  data_vencimento: string
+  data_pagamento: string | null
+  status: StatusConta
+  forma_pagamento: string | null
+  observacoes: string | null
+  created_at: string
+  created_by: string | null
+}
+
+export type ContaFinanceiraInsert = {
+  tipo: TipoConta
+  descricao: string
+  categoria?: string | null
+  valor: number
+  data_vencimento: string
+  data_pagamento?: string | null
+  status?: StatusConta
+  forma_pagamento?: string | null
+  observacoes?: string | null
+}
+
+export type ContaFinanceiraUpdate = Partial<ContaFinanceiraInsert>
+
 export type Database = {
   public: {
     Tables: {
@@ -103,6 +134,12 @@ export type Database = {
         Row: VendaItem
         Insert: VendaItemInsert
         Update: Partial<VendaItemInsert>
+        Relationships: []
+      }
+      contas_financeiras: {
+        Row: ContaFinanceira
+        Insert: ContaFinanceiraInsert
+        Update: ContaFinanceiraUpdate
         Relationships: []
       }
     }

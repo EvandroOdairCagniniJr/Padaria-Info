@@ -16,12 +16,10 @@ const navItems = [
   { to: '/produtos', label: 'Produtos', icon: Package },
   { to: '/estoque', label: 'Estoque', icon: Warehouse },
   { to: '/pdv', label: 'PDV', icon: ShoppingCart },
+  { to: '/financeiro', label: 'Financeiro', icon: Wallet },
 ]
 
-const comingSoonItems = [
-  { label: 'Financeiro', icon: Wallet },
-  { label: 'Produção', icon: ChefHat },
-]
+const comingSoonItems = [{ label: 'Produção', icon: ChefHat }]
 
 export function MainLayout() {
   const { user, signOut } = useAuth()
