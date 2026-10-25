@@ -35,6 +35,8 @@ const guias: Guia[] = [
     papeis: todos,
     passos: [
       'Entre com o e-mail e a senha que o responsável pela padaria passou para você.',
+      'Ainda não tem conta? Use "Criar conta" na tela de login e aguarde o responsável liberar seu acesso.',
+      'Esqueceu a senha? Clique em "Esqueci minha senha": chega um código no seu e-mail para você entrar e criar uma senha nova.',
       'Seu nome e seu papel aparecem no canto de baixo do menu — confira se está na sua conta.',
       'O menu da esquerda mostra só o que você usa no dia a dia.',
       'No fim do turno, clique em "Sair", principalmente em computador compartilhado.',
