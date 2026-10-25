@@ -22,7 +22,8 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useProdutos } from '@/features/produtos/api'
-import { useCreateReceita, useReceitaItens, useUpdateReceita } from '@/features/producao/api'
+import { useReceitaItens, useSalvarReceita } from '@/features/producao/api'
+import { mensagemErro } from '@/lib/format'
 import type { Receita } from '@/types/database'
 
 const itemSchema = z.object({
@@ -51,8 +52,7 @@ export function ReceitaFormDialog({ open, onOpenChange, receita }: ReceitaFormDi
   const isEditing = Boolean(receita)
   const { data: produtos } = useProdutos()
   const { data: itensExistentes } = useReceitaItens(open ? (receita?.id ?? null) : null)
-  const createReceita = useCreateReceita()
-  const updateReceita = useUpdateReceita()
+  const salvarReceita = useSalvarReceita()
 
   const {
     register,
@@ -103,16 +103,15 @@ export function ReceitaFormDialog({ open, onOpenChange, receita }: ReceitaFormDi
         rendimento: values.rendimento,
         modo_preparo: values.modo_preparo,
       }
-      if (isEditing && receita) {
-        await updateReceita.mutateAsync({ id: receita.id, changes: receitaFields, itens: values.itens })
-        toast.success('Receita atualizada')
-      } else {
-        await createReceita.mutateAsync({ receita: receitaFields, itens: values.itens })
-        toast.success('Receita criada')
-      }
+      await salvarReceita.mutateAsync({
+        id: receita?.id ?? null,
+        receita: receitaFields,
+        itens: values.itens,
+      })
+      toast.success(isEditing ? 'Receita atualizada' : 'Receita criada')
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar receita')
+      toast.error(mensagemErro(err, 'Erro ao salvar receita'))
     }
   }
 

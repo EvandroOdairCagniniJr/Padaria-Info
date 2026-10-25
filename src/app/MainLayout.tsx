@@ -1,71 +1,201 @@
 import {
+  BookOpen,
   ChefHat,
   LayoutDashboard,
+  Loader2,
   LogOut,
+  Menu,
   Package,
+  Receipt,
   ShoppingCart,
+  Store,
+  Users,
   Warehouse,
   Wallet,
+  X,
 } from 'lucide-react'
+import { Suspense, useEffect, useState } from 'react'
 import { NavLink, Outlet } from 'react-router-dom'
 import { cn } from '@/lib/utils'
+import { BoasVindas } from '@/app/BoasVindas'
+import { Avatar } from '@/components/Avatar'
+import { LogoPao } from '@/components/LogoPao'
+import { usePadaria } from '@/features/padaria/api'
+import { PerfilDialog } from '@/features/auth/PerfilDialog'
+import { useNovidadesNaoVistas } from '@/features/equipe/Novidades'
+import { precarregarPaginas } from '@/app/paginas'
 import { useAuth } from '@/features/auth/AuthContext'
+import { papelLabels } from '@/lib/permissoes'
+import type { Papel } from '@/types/database'
 
+const todos: Papel[] = ['dono', 'admin', 'funcionario']
+const gestao: Papel[] = ['dono', 'admin']
+
+// Mesmas regras das rotas em AppRouter (RequirePapel).
 const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true },
-  { to: '/produtos', label: 'Produtos', icon: Package },
-  { to: '/estoque', label: 'Estoque', icon: Warehouse },
-  { to: '/pdv', label: 'PDV', icon: ShoppingCart },
-  { to: '/financeiro', label: 'Financeiro', icon: Wallet },
-  { to: '/producao', label: 'Produção', icon: ChefHat },
+  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, papeis: gestao },
+  { to: '/pdv', label: 'PDV', icon: ShoppingCart, papeis: todos },
+  { to: '/vendas', label: 'Vendas', icon: Receipt, papeis: todos },
+  { to: '/produtos', label: 'Produtos', icon: Package, papeis: gestao },
+  { to: '/estoque', label: 'Estoque', icon: Warehouse, papeis: todos },
+  { to: '/producao', label: 'Produção', icon: ChefHat, papeis: todos },
+  { to: '/financeiro', label: 'Financeiro', icon: Wallet, papeis: gestao },
+  { to: '/equipe', label: 'Equipe', icon: Users, papeis: todos },
+  { to: '/padaria', label: 'Minha padaria', icon: Store, papeis: ['dono'] as Papel[] },
+  { to: '/guia', label: 'Guia e dicas', icon: BookOpen, papeis: todos },
 ]
+
+// Topo do menu: o pão do ícone do site e o nome cadastrado em "Minha padaria".
+function Logo() {
+  const padaria = usePadaria()
+  const nome = padaria.data?.nome_fantasia || (padaria.isLoading ? '' : 'Padaria Info')
+  return (
+    <div className="flex min-w-0 items-center gap-2.5">
+      <LogoPao />
+      <div className="min-w-0 font-heading text-lg leading-tight font-semibold">
+        <span className="line-clamp-2 break-words" title={nome}>
+          {nome}
+        </span>
+      </div>
+    </div>
+  )
+}
 
 export function MainLayout() {
   const { user, signOut } = useAuth()
+  // Gaveta do menu em telas pequenas.
+  const [menuAberto, setMenuAberto] = useState(false)
+  const [perfilAberto, setPerfilAberto] = useState(false)
+  // Dono e gerência: mudanças de perfil que ainda não viram (aparece no item Equipe).
+  const novidades = useNovidadesNaoVistas()
 
-  return (
-    <div className="flex min-h-svh">
-      <aside className="flex w-60 shrink-0 flex-col border-r bg-card">
-        <div className="border-b px-4 py-4">
-          <span className="text-lg font-semibold tracking-tight">Padaria Info</span>
-        </div>
+  // Com a tela atual já aberta, baixa os outros módulos sem atrapalhar.
+  useEffect(() => {
+    const id = setTimeout(precarregarPaginas, 1000)
+    return () => clearTimeout(id)
+  }, [])
 
-        <nav className="flex-1 space-y-1 p-3">
-          {navItems.map((item) => (
+  const menu = (
+    <>
+      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
+        {navItems
+          .filter((item) => user && item.papeis.includes(user.papel))
+          .map((item) => (
             <NavLink
               key={item.to}
               to={item.to}
               end={item.end}
+              onClick={() => setMenuAberto(false)}
               className={({ isActive }) =>
                 cn(
-                  'flex items-center gap-2 rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
                   isActive
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-muted-foreground hover:bg-muted hover:text-foreground',
+                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
                 )
               }
             >
               <item.icon className="size-4" />
               {item.label}
+              {item.to === '/equipe' && novidades > 0 && (
+                <span
+                  className="ml-auto rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-semibold text-white"
+                  title={`${novidades} novidade(s) da equipe`}
+                >
+                  {novidades}
+                </span>
+              )}
             </NavLink>
           ))}
-        </nav>
+      </nav>
 
-        <div className="border-t p-3">
-          <div className="mb-2 truncate px-1 text-xs text-muted-foreground">{user?.email}</div>
+      <div className="border-t border-sidebar-border p-3">
+        {user && (
           <button
             type="button"
-            onClick={() => signOut()}
-            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm font-medium text-muted-foreground hover:bg-muted hover:text-foreground"
+            onClick={() => {
+              setMenuAberto(false)
+              setPerfilAberto(true)
+            }}
+            title="Editar perfil"
+            className="mb-1 flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left hover:bg-sidebar-accent"
           >
-            <LogOut className="size-4" />
-            Sair
+            <Avatar nome={user.nome || user.email} foto={user.foto} tamanho="md" />
+            <div className="min-w-0 flex-1">
+              <div className="truncate text-sm font-medium">{user.nome || user.email}</div>
+              <div className="truncate text-xs text-sidebar-foreground/60">
+                {user.cargo || papelLabels[user.papel]} · Editar perfil
+              </div>
+            </div>
           </button>
+        )}
+        <button
+          type="button"
+          onClick={() => signOut()}
+          className="flex w-full items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+        >
+          <LogOut className="size-4" />
+          Sair
+        </button>
+      </div>
+    </>
+  )
+
+  return (
+    <div className="flex h-svh flex-col md:flex-row">
+      {/* Telas pequenas: barra no topo com botão de menu */}
+      <header className="flex items-center justify-between bg-sidebar px-4 py-2.5 text-sidebar-foreground md:hidden">
+        <Logo />
+        <button
+          type="button"
+          onClick={() => setMenuAberto(true)}
+          aria-label="Abrir menu"
+          className="rounded-lg p-2 hover:bg-sidebar-accent"
+        >
+          <Menu className="size-5" />
+        </button>
+      </header>
+
+      {menuAberto && (
+        <div className="fixed inset-0 z-50 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setMenuAberto(false)} />
+          <aside className="relative flex h-full w-72 max-w-[85vw] flex-col bg-sidebar text-sidebar-foreground shadow-xl">
+            <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
+              <Logo />
+              <button
+                type="button"
+                onClick={() => setMenuAberto(false)}
+                aria-label="Fechar menu"
+                className="rounded-lg p-2 hover:bg-sidebar-accent"
+              >
+                <X className="size-5" />
+              </button>
+            </div>
+            {menu}
+          </aside>
         </div>
+      )}
+
+      <aside className="hidden w-60 shrink-0 flex-col bg-sidebar text-sidebar-foreground md:flex">
+        <div className="border-b border-sidebar-border px-4 py-4">
+          <Logo />
+        </div>
+        {menu}
       </aside>
 
-      <main className="flex-1 overflow-auto bg-muted/20 p-6">
-        <Outlet />
+      {/* min-h-0 + flex-col: o conteúdo rola por dentro; o PDV usa flex-1 para caber na tela sem rolar. */}
+      <main className="flex min-h-0 flex-1 flex-col overflow-auto p-4 md:p-6">
+        <Suspense
+          fallback={
+            <div className="flex justify-center py-12">
+              <Loader2 className="size-6 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <BoasVindas />
+          <Outlet />
+        </Suspense>
+        <PerfilDialog open={perfilAberto} onOpenChange={setPerfilAberto} />
       </main>
     </div>
   )

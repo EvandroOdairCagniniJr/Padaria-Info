@@ -1,66 +1,50 @@
 # Padaria Info
 
-Sistema web de gestão para padarias — feito para uso em computadores, com foco em qualidade e praticidade no dia a dia.
+Sistema web de gestão para padarias — feito para uso nos computadores da padaria, com foco em qualidade e praticidade no dia a dia.
 
-Stack: React + Vite + TypeScript, Tailwind CSS + shadcn/ui, Supabase (banco de dados, autenticação e API).
+Stack: React + Vite + TypeScript, Tailwind CSS + shadcn/ui no navegador; servidor Node (Express) + MySQL 8. O servidor entrega o site e a API no mesmo endereço, então os outros computadores e celulares da rede só precisam do navegador.
 
 ## Módulos
 
-Concluídos:
-- Autenticação (login)
-- Dashboard
-- Produtos (cadastro)
-- Estoque (entradas, saídas e ajustes)
-- PDV (venda rápida no balcão)
-- Financeiro (contas a pagar/receber, fluxo de caixa)
-- Produção/Receitas (ficha técnica, planejamento de produção)
+- **Login e papéis**: dono, admin (gerente) e funcionário. Cada um vê só o que usa
+- **Dashboard**: vendas do dia, estoque baixo, contas a vencer, produções pendentes
+- **PDV**: venda rápida no balcão, com comprovante enviado pelo WhatsApp do cliente
+- **Produtos** e **Estoque**: entradas, saídas e ajustes, com histórico de quem fez
+- **Produção/Receitas**: ficha técnica e planejamento; concluir dá baixa nos ingredientes
+- **Financeiro**: contas a pagar e a receber
+- **Equipe** (só o dono): cadastro e acessos, desempenho por pessoa e linha do tempo
+- **Guia e dicas**: passo a passo para cada papel, com aviso de boas-vindas no primeiro acesso
+
+| | Dono | Admin | Funcionário |
+|---|:-:|:-:|:-:|
+| PDV, Estoque, Produção (planejar/concluir) | ✓ | ✓ | ✓ |
+| Dashboard, Produtos, Financeiro, editar receitas | ✓ | ✓ | |
+| Equipe | ✓ | | |
+
+As permissões são checadas no servidor, não só escondidas na tela.
 
 ## Configuração
 
-### 1. Instalar dependências
+1. **MySQL 8** instalado e rodando (no Windows: serviço `MySQL80`).
+2. Instale as dependências:
+   ```bash
+   npm install
+   ```
+3. Copie `.env.example` para `.env` e preencha a senha do MySQL e um `JWT_SECRET` aleatório. Opcional: `VITE_NOME_PADARIA` com o nome que sai no comprovante.
+4. Suba tudo:
+   ```bash
+   npm start
+   ```
+   Isso gera o build e liga o servidor. O banco `padaria_info` e as tabelas são criados sozinhos.
+5. Abra http://localhost:3000. No primeiro acesso a tela pede para criar a conta do **dono**. Os demais membros são cadastrados em **Equipe**.
 
-```bash
-npm install
-```
+O terminal mostra também o endereço de rede (ex: `http://192.168.0.10:3000`) para abrir nos outros computadores da padaria. O computador com o servidor precisa ficar ligado.
 
-### 2. Criar um projeto no Supabase
+## Desenvolvimento
 
-1. Crie uma conta e um projeto em [supabase.com](https://supabase.com) (o plano gratuito é suficiente para começar).
-2. No painel do projeto, vá em **Settings → API** e copie a **Project URL** e a **anon public key**.
-3. Copie `.env.example` para `.env.local` e preencha os dois valores:
-
-```bash
-cp .env.example .env.local
-```
-
-Sem essas credenciais o app sobe normalmente e a tela de login aparece, mas o login não funciona.
-
-### 3. Rodar as migrations do banco
-
-No painel do Supabase, abra o **SQL Editor** e execute, em ordem, o conteúdo dos arquivos em `supabase/migrations/`:
-
-1. `0001_schema.sql` — cria as tabelas e as políticas de acesso (RLS)
-2. `0002_functions.sql` — cria as funções que registram movimentações de estoque e finalizam vendas
-3. `0003_financeiro.sql` — cria a tabela de contas a pagar/receber
-4. `0004_producao.sql` — cria as tabelas de receitas/ingredientes e planejamento de produção, e a função que conclui uma produção
-
-(Alternativamente, se preferir usar o Supabase CLI: `supabase db push`.)
-
-### 4. Criar um usuário de teste
-
-No painel do Supabase, vá em **Authentication → Users → Add user** e crie um usuário com e-mail e senha. É esse usuário que você usará para logar no sistema (não há tela de cadastro pública ainda — o acesso é apenas para a equipe da padaria).
-
-### 5. Rodar o projeto
-
-```bash
-npm run dev
-```
-
-Acesse http://localhost:5173.
-
-## Scripts
-
-- `npm run dev` — servidor de desenvolvimento
-- `npm run build` — build de produção (roda o type-check antes)
+- `npm run dev:server` — API em http://localhost:3000, reinicia ao salvar
+- `npm run dev` — front com recarregamento instantâneo em http://localhost:5173 (encaminha `/api` para o servidor)
+- `npm run build` — type-check e build de produção
 - `npm run lint` — lint (oxlint)
-- `npm run preview` — pré-visualiza o build de produção
+
+Estrutura: `server/` (API, regras de negócio em transações, `schema.sql`), `src/features/<módulo>/` (telas e hooks de dados de cada módulo).

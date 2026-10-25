@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { useCreateConta, useUpdateConta } from '@/features/financeiro/api'
 import type { ContaFinanceira, TipoConta } from '@/types/database'
+import { mensagemErro } from '@/lib/format'
 
 const contaSchema = z.object({
   tipo: z.enum(['pagar', 'receber']),
@@ -42,7 +43,13 @@ const tipoLabels: Record<TipoConta, string> = {
   receber: 'Conta a receber',
 }
 
-const formasPagamento = ['dinheiro', 'pix', 'cartao', 'transferencia', 'boleto']
+const formasPagamento = [
+  { value: 'dinheiro', label: 'Dinheiro' },
+  { value: 'pix', label: 'Pix' },
+  { value: 'cartao', label: 'Cartão' },
+  { value: 'transferencia', label: 'Transferência' },
+  { value: 'boleto', label: 'Boleto' },
+]
 
 interface ContaFormDialogProps {
   open: boolean
@@ -97,7 +104,7 @@ export function ContaFormDialog({ open, onOpenChange, conta, tipoPadrao }: Conta
       }
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao salvar lançamento')
+      toast.error(mensagemErro(err, 'Erro ao salvar lançamento'))
     }
   }
 
@@ -164,8 +171,8 @@ export function ContaFormDialog({ open, onOpenChange, conta, tipoPadrao }: Conta
                 </SelectTrigger>
                 <SelectContent>
                   {formasPagamento.map((f) => (
-                    <SelectItem key={f} value={f}>
-                      {f}
+                    <SelectItem key={f.value} value={f.value}>
+                      {f.label}
                     </SelectItem>
                   ))}
                 </SelectContent>

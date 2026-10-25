@@ -22,6 +22,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { useCreateProducao, useReceitas } from '@/features/producao/api'
+import { hojeISO, mensagemErro } from '@/lib/format'
 
 const producaoSchema = z.object({
   receita_id: z.string().min(1, 'Selecione a receita'),
@@ -36,8 +37,6 @@ interface ProducaoFormDialogProps {
   onOpenChange: (open: boolean) => void
 }
 
-const hoje = new Date().toISOString().slice(0, 10)
-
 export function ProducaoFormDialog({ open, onOpenChange }: ProducaoFormDialogProps) {
   const { data: receitas } = useReceitas()
   const createProducao = useCreateProducao()
@@ -51,11 +50,11 @@ export function ProducaoFormDialog({ open, onOpenChange }: ProducaoFormDialogPro
     formState: { errors, isSubmitting },
   } = useForm<ProducaoForm>({
     resolver: zodResolver(producaoSchema),
-    defaultValues: { data: hoje },
+    defaultValues: { data: hojeISO() },
   })
 
   useEffect(() => {
-    if (open) reset({ receita_id: '', data: hoje, observacoes: '' })
+    if (open) reset({ receita_id: '', data: hojeISO(), observacoes: '' })
   }, [open, reset])
 
   async function onSubmit(values: ProducaoForm) {
@@ -64,7 +63,7 @@ export function ProducaoFormDialog({ open, onOpenChange }: ProducaoFormDialogPro
       toast.success('Produção planejada')
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao planejar produção')
+      toast.error(mensagemErro(err, 'Erro ao planejar produção'))
     }
   }
 

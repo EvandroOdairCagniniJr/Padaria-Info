@@ -23,6 +23,7 @@ import {
 } from '@/components/ui/select'
 import { useAjustarEstoque } from '@/features/estoque/api'
 import type { Produto, TipoMovimentacao } from '@/types/database'
+import { mensagemErro } from '@/lib/format'
 
 const ajusteSchema = z.object({
   tipo: z.enum(['entrada', 'saida', 'ajuste']),
@@ -70,7 +71,7 @@ export function AjustarEstoqueDialog({ open, onOpenChange, produto }: AjustarEst
       toast.success('Estoque atualizado')
       onOpenChange(false)
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao ajustar estoque')
+      toast.error(mensagemErro(err, 'Erro ao ajustar estoque'))
     }
   }
 

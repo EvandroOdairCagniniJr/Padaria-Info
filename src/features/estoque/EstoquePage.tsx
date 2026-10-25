@@ -13,6 +13,7 @@ import {
 import { AjustarEstoqueDialog } from '@/features/estoque/AjustarEstoqueDialog'
 import { useProdutos } from '@/features/produtos/api'
 import type { Produto } from '@/types/database'
+import { IconeProduto } from '@/components/IconeProduto'
 
 export function EstoquePage() {
   const { data: produtos, isLoading } = useProdutos()
@@ -72,7 +73,12 @@ export function EstoquePage() {
               const baixo = produto.estoque_atual <= produto.estoque_minimo
               return (
                 <TableRow key={produto.id}>
-                  <TableCell className="font-medium">{produto.nome}</TableCell>
+                  <TableCell className="font-medium">
+                  <div className="flex items-center gap-2.5">
+                    <IconeProduto produto={produto} />
+                    {produto.nome}
+                  </div>
+                </TableCell>
                   <TableCell className="text-muted-foreground">{produto.unidade}</TableCell>
                   <TableCell className={`text-right ${baixo ? 'font-medium text-destructive' : ''}`}>
                     {produto.estoque_atual}

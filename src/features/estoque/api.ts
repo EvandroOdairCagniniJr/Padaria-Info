@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { supabase } from '@/lib/supabase'
+import { api } from '@/lib/api'
 import type { TipoMovimentacao } from '@/types/database'
 
 interface AjustarEstoqueInput {
@@ -12,15 +12,13 @@ interface AjustarEstoqueInput {
 export function useAjustarEstoque() {
   const queryClient = useQueryClient()
   return useMutation({
-    mutationFn: async ({ produtoId, tipo, quantidade, motivo }: AjustarEstoqueInput) => {
-      const { error } = await supabase.rpc('registrar_movimentacao_estoque', {
-        p_produto_id: produtoId,
-        p_tipo: tipo,
-        p_quantidade: quantidade,
-        p_motivo: motivo ?? null,
-      })
-      if (error) throw error
-    },
+    mutationFn: ({ produtoId, tipo, quantidade, motivo }: AjustarEstoqueInput) =>
+      api.post('/estoque/movimentacoes', {
+        produto_id: produtoId,
+        tipo,
+        quantidade,
+        motivo: motivo ?? null,
+      }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['produtos'] }),
   })
 }

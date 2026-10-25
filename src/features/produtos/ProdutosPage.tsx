@@ -21,6 +21,8 @@ import {
 import { useDeleteProduto, useProdutos } from '@/features/produtos/api'
 import { ProdutoFormDialog } from '@/features/produtos/ProdutoFormDialog'
 import type { Produto } from '@/types/database'
+import { mensagemErro } from '@/lib/format'
+import { IconeProduto } from '@/components/IconeProduto'
 
 export function ProdutosPage() {
   const { data: produtos, isLoading } = useProdutos()
@@ -54,13 +56,13 @@ export function ProdutosPage() {
       await deleteProduto.mutateAsync(produto.id)
       toast.success('Produto removido')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover produto')
+      toast.error(mensagemErro(err, 'Erro ao remover produto'))
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Produtos</h1>
           <p className="text-sm text-muted-foreground">Cadastro de produtos da padaria</p>
@@ -112,7 +114,12 @@ export function ProdutosPage() {
 
             {filtered.map((produto) => (
               <TableRow key={produto.id}>
-                <TableCell className="font-medium">{produto.nome}</TableCell>
+                <TableCell className="font-medium">
+                  <div className="flex items-center gap-2.5">
+                    <IconeProduto produto={produto} />
+                    {produto.nome}
+                  </div>
+                </TableCell>
                 <TableCell className="text-muted-foreground">{produto.categoria || '—'}</TableCell>
                 <TableCell className="text-muted-foreground">{produto.unidade}</TableCell>
                 <TableCell className="text-right">

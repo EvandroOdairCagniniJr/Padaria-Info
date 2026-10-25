@@ -26,16 +26,7 @@ import {
 } from '@/features/financeiro/api'
 import { ContaFormDialog } from '@/features/financeiro/ContaFormDialog'
 import type { ContaFinanceira, TipoConta } from '@/types/database'
-
-function formatBRL(value: number) {
-  return value.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
-function formatData(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR')
-}
-
-const hoje = new Date().toISOString().slice(0, 10)
+import { formatBRL, formatData, hojeISO, mensagemErro } from '@/lib/format'
 
 export function FinanceiroPage() {
   const { data: contas, isLoading } = useContasFinanceiras()
@@ -75,7 +66,7 @@ export function FinanceiroPage() {
       await marcarComoPago.mutateAsync(conta.id)
       toast.success(conta.tipo === 'pagar' ? 'Marcado como pago' : 'Marcado como recebido')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao atualizar lançamento')
+      toast.error(mensagemErro(err, 'Erro ao atualizar lançamento'))
     }
   }
 
@@ -85,13 +76,13 @@ export function FinanceiroPage() {
       await deleteConta.mutateAsync(conta.id)
       toast.success('Lançamento removido')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover lançamento')
+      toast.error(mensagemErro(err, 'Erro ao remover lançamento'))
     }
   }
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Financeiro</h1>
           <p className="text-sm text-muted-foreground">Contas a pagar, a receber e fluxo de caixa</p>
@@ -187,7 +178,7 @@ export function FinanceiroPage() {
             )}
 
             {listaFiltrada.map((conta) => {
-              const atrasado = conta.status === 'pendente' && conta.data_vencimento < hoje
+              const atrasado = conta.status === 'pendente' && conta.data_vencimento < hojeISO()
               return (
                 <TableRow key={conta.id}>
                   <TableCell className="font-medium">{conta.descricao}</TableCell>

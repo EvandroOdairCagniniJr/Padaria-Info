@@ -2,11 +2,12 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
+@import "@fontsource-variable/outfit";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: var(--font-sans);
+    --font-heading: 'Outfit Variable', 'Geist Variable', sans-serif;
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -48,39 +49,40 @@
     --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* Paleta de padaria: miolo creme, trigo, casca dourada e chocolate (menu lateral). */
 :root {
-    --background: oklch(1 0 0);
-    --foreground: oklch(0.145 0 0);
-    --card: oklch(1 0 0);
-    --card-foreground: oklch(0.145 0 0);
-    --popover: oklch(1 0 0);
-    --popover-foreground: oklch(0.145 0 0);
-    --primary: oklch(0.205 0 0);
-    --primary-foreground: oklch(0.985 0 0);
-    --secondary: oklch(0.97 0 0);
-    --secondary-foreground: oklch(0.205 0 0);
-    --muted: oklch(0.97 0 0);
-    --muted-foreground: oklch(0.556 0 0);
-    --accent: oklch(0.97 0 0);
-    --accent-foreground: oklch(0.205 0 0);
-    --destructive: oklch(0.577 0.245 27.325);
-    --border: oklch(0.922 0 0);
-    --input: oklch(0.922 0 0);
-    --ring: oklch(0.708 0 0);
-    --chart-1: oklch(0.87 0 0);
-    --chart-2: oklch(0.556 0 0);
-    --chart-3: oklch(0.439 0 0);
-    --chart-4: oklch(0.371 0 0);
-    --chart-5: oklch(0.269 0 0);
-    --radius: 0.625rem;
-    --sidebar: oklch(0.985 0 0);
-    --sidebar-foreground: oklch(0.145 0 0);
-    --sidebar-primary: oklch(0.205 0 0);
-    --sidebar-primary-foreground: oklch(0.985 0 0);
-    --sidebar-accent: oklch(0.97 0 0);
-    --sidebar-accent-foreground: oklch(0.205 0 0);
-    --sidebar-border: oklch(0.922 0 0);
-    --sidebar-ring: oklch(0.708 0 0);
+    --background: oklch(0.975 0.014 85);
+    --foreground: oklch(0.27 0.035 50);
+    --card: oklch(0.995 0.006 85);
+    --card-foreground: oklch(0.27 0.035 50);
+    --popover: oklch(0.995 0.006 85);
+    --popover-foreground: oklch(0.27 0.035 50);
+    --primary: oklch(0.5 0.115 52);
+    --primary-foreground: oklch(0.985 0.012 85);
+    --secondary: oklch(0.935 0.04 82);
+    --secondary-foreground: oklch(0.33 0.05 50);
+    --muted: oklch(0.948 0.022 82);
+    --muted-foreground: oklch(0.5 0.04 55);
+    --accent: oklch(0.92 0.055 80);
+    --accent-foreground: oklch(0.3 0.05 50);
+    --destructive: oklch(0.55 0.2 27);
+    --border: oklch(0.885 0.03 75);
+    --input: oklch(0.86 0.035 75);
+    --ring: oklch(0.68 0.11 65);
+    --chart-1: oklch(0.68 0.13 65);
+    --chart-2: oklch(0.5 0.115 52);
+    --chart-3: oklch(0.78 0.1 85);
+    --chart-4: oklch(0.4 0.07 45);
+    --chart-5: oklch(0.6 0.08 30);
+    --radius: 0.75rem;
+    --sidebar: oklch(0.29 0.045 48);
+    --sidebar-foreground: oklch(0.93 0.03 80);
+    --sidebar-primary: oklch(0.8 0.12 78);
+    --sidebar-primary-foreground: oklch(0.25 0.045 48);
+    --sidebar-accent: oklch(0.36 0.05 48);
+    --sidebar-accent-foreground: oklch(0.97 0.02 82);
+    --sidebar-border: oklch(0.38 0.045 48);
+    --sidebar-ring: oklch(0.8 0.12 78);
 }
 
 .dark {
@@ -127,4 +129,47 @@
   html {
     @apply font-sans;
     }
+  h1 {
+    font-family: var(--font-heading);
+    }
+}
+/* Coroa do 1º lugar no ranking (Equipe): pula girando de leve, "amassa" ao cair
+   e a sombra embaixo encolhe enquanto ela está no ar. */
+@keyframes coroa-pulo {
+  0%, 100% { transform: translateY(0) rotate(-8deg) scale(1.06, 0.94); }
+  15% { transform: translateY(0) rotate(-6deg) scale(1, 1); }
+  45% { transform: translateY(-10px) rotate(6deg) scale(0.98, 1.04); }
+  60% { transform: translateY(-10px) rotate(8deg) scale(1, 1); }
+  88% { transform: translateY(0) rotate(-8deg) scale(1.08, 0.92); }
+}
+
+@keyframes coroa-sombra {
+  0%, 15%, 88%, 100% { transform: scaleX(1); opacity: 0.35; }
+  45%, 60% { transform: scaleX(0.55); opacity: 0.15; }
+}
+
+@keyframes coroa-brilho {
+  0%, 70%, 100% { opacity: 0; transform: scale(0.4) rotate(0deg); }
+  80% { opacity: 1; transform: scale(1) rotate(45deg); }
+}
+
+.coroa-pulo {
+  animation: coroa-pulo 1.6s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+  transform-origin: 50% 100%;
+}
+
+.coroa-sombra {
+  animation: coroa-sombra 1.6s cubic-bezier(0.45, 0, 0.3, 1) infinite;
+}
+
+.coroa-brilho {
+  animation: coroa-brilho 3.2s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .coroa-pulo,
+  .coroa-sombra,
+  .coroa-brilho {
+    animation: none;
+  }
 }

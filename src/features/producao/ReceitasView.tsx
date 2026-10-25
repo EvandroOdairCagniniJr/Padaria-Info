@@ -19,13 +19,18 @@ import {
 import { useProdutos } from '@/features/produtos/api'
 import { useDeleteReceita, useReceitas, useTodosReceitaItens } from '@/features/producao/api'
 import { ReceitaFormDialog } from '@/features/producao/ReceitaFormDialog'
+import { useAuth } from '@/features/auth/AuthContext'
+import { ehGestao } from '@/lib/permissoes'
 import type { Receita } from '@/types/database'
+import { mensagemErro } from '@/lib/format'
 
 export function ReceitasView() {
   const { data: receitas, isLoading } = useReceitas()
   const { data: produtos } = useProdutos()
   const { data: itens } = useTodosReceitaItens()
   const deleteReceita = useDeleteReceita()
+  // Funcionário consulta as fichas técnicas; só dono/admin editam.
+  const podeEditar = ehGestao(useAuth().user?.papel)
 
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editing, setEditing] = useState<Receita | null>(null)
@@ -58,18 +63,20 @@ export function ReceitasView() {
       await deleteReceita.mutateAsync(receita.id)
       toast.success('Receita removida')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover receita')
+      toast.error(mensagemErro(err, 'Erro ao remover receita'))
     }
   }
 
   return (
     <div className="space-y-4">
-      <div className="flex justify-end">
-        <Button onClick={openCreate}>
-          <Plus className="size-4" />
-          Nova receita
-        </Button>
-      </div>
+      {podeEditar && (
+        <div className="flex justify-end">
+          <Button onClick={openCreate}>
+            <Plus className="size-4" />
+            Nova receita
+          </Button>
+        </div>
+      )}
 
       <div className="rounded-lg border bg-card">
         <Table>
@@ -110,19 +117,26 @@ export function ReceitasView() {
                   {contagemIngredientes.get(receita.id) ?? 0}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEdit(receita)}>Editar</DropdownMenuItem>
-                      <DropdownMenuItem variant="destructive" onClick={() => handleDelete(receita)}>
-                        Remover
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {podeEditar && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem onClick={() => openEdit(receita)}>
+                          Editar
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          variant="destructive"
+                          onClick={() => handleDelete(receita)}
+                        >
+                          Remover
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

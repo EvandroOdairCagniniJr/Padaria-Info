@@ -24,17 +24,17 @@ import {
   useReceitas,
 } from '@/features/producao/api'
 import { ProducaoFormDialog } from '@/features/producao/ProducaoFormDialog'
+import { useAuth } from '@/features/auth/AuthContext'
+import { ehGestao } from '@/lib/permissoes'
 import type { Producao } from '@/types/database'
-
-function formatData(iso: string) {
-  return new Date(`${iso}T00:00:00`).toLocaleDateString('pt-BR')
-}
+import { formatData, mensagemErro } from '@/lib/format'
 
 export function PlanejamentoView() {
   const { data: producoes, isLoading } = useProducoes()
   const { data: receitas } = useReceitas()
   const concluirProducao = useConcluirProducao()
   const deleteProducao = useDeleteProducao()
+  const podeRemover = ehGestao(useAuth().user?.papel)
 
   const [dialogOpen, setDialogOpen] = useState(false)
 
@@ -49,7 +49,7 @@ export function PlanejamentoView() {
       await concluirProducao.mutateAsync(producao.id)
       toast.success('Produção concluída — estoque atualizado')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao concluir produção')
+      toast.error(mensagemErro(err, 'Erro ao concluir produção'))
     }
   }
 
@@ -59,7 +59,7 @@ export function PlanejamentoView() {
       await deleteProducao.mutateAsync(producao.id)
       toast.success('Produção removida')
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : 'Erro ao remover produção')
+      toast.error(mensagemErro(err, 'Erro ao remover produção'))
     }
   }
 
@@ -115,23 +115,31 @@ export function PlanejamentoView() {
                   )}
                 </TableCell>
                 <TableCell>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-sm">
-                        <MoreHorizontal className="size-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      {producao.status === 'planejado' && (
-                        <DropdownMenuItem onClick={() => handleConcluir(producao)}>
-                          Concluir produção
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem variant="destructive" onClick={() => handleDelete(producao)}>
-                        Remover
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
+                  {/* Concluída já movimentou o estoque — não pode ser removida (policy no banco). */}
+                  {producao.status !== 'concluido' && (
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon-sm">
+                          <MoreHorizontal className="size-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        {producao.status === 'planejado' && (
+                          <DropdownMenuItem onClick={() => handleConcluir(producao)}>
+                            Concluir produção
+                          </DropdownMenuItem>
+                        )}
+                        {podeRemover && (
+                          <DropdownMenuItem
+                            variant="destructive"
+                            onClick={() => handleDelete(producao)}
+                          >
+                            Remover
+                          </DropdownMenuItem>
+                        )}
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  )}
                 </TableCell>
               </TableRow>
             ))}

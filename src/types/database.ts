@@ -1,10 +1,4 @@
-// Tipos manuais alinhados ao schema em supabase/migrations.
-// Quando o projeto Supabase estiver criado, prefira gerar este arquivo com:
-// npx supabase gen types typescript --project-id SEU_PROJECT_ID > src/types/database.ts
-//
-// Nota: usamos `type X = {...}` (object literal) em vez de `interface X {...}`
-// porque o supabase-js exige que os tipos de linha satisfaçam Record<string, unknown>,
-// e apenas object literal types recebem essa assinatura de índice implícita no TypeScript.
+// Tipos das linhas devolvidas pela API (server/routes.ts), espelhando server/schema.sql.
 
 export type FormaPagamento = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix'
 export type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
@@ -62,6 +56,8 @@ export type Venda = {
   status: string
   created_at: string
   created_by: string | null
+  // Nome de quem registrou a venda (join feito pela API).
+  vendedor_nome?: string | null
 }
 
 export type VendaInsert = {
@@ -152,6 +148,7 @@ export type Producao = {
   created_at: string
   created_by: string | null
   concluida_em: string | null
+  concluida_por: string | null
 }
 
 export type ProducaoInsert = {
@@ -163,82 +160,170 @@ export type ProducaoInsert = {
 
 export type ProducaoUpdate = Partial<ProducaoInsert>
 
-export type Database = {
-  public: {
-    Tables: {
-      produtos: {
-        Row: Produto
-        Insert: ProdutoInsert
-        Update: ProdutoUpdate
-        Relationships: []
-      }
-      movimentacoes_estoque: {
-        Row: MovimentacaoEstoque
-        Insert: MovimentacaoEstoqueInsert
-        Update: Partial<MovimentacaoEstoqueInsert>
-        Relationships: []
-      }
-      vendas: {
-        Row: Venda
-        Insert: VendaInsert
-        Update: Partial<VendaInsert>
-        Relationships: []
-      }
-      vendas_itens: {
-        Row: VendaItem
-        Insert: VendaItemInsert
-        Update: Partial<VendaItemInsert>
-        Relationships: []
-      }
-      contas_financeiras: {
-        Row: ContaFinanceira
-        Insert: ContaFinanceiraInsert
-        Update: ContaFinanceiraUpdate
-        Relationships: []
-      }
-      receitas: {
-        Row: Receita
-        Insert: ReceitaInsert
-        Update: ReceitaUpdate
-        Relationships: []
-      }
-      receita_itens: {
-        Row: ReceitaItem
-        Insert: ReceitaItemInsert
-        Update: ReceitaItemUpdate
-        Relationships: []
-      }
-      producoes: {
-        Row: Producao
-        Insert: ProducaoInsert
-        Update: ProducaoUpdate
-        Relationships: []
-      }
-    }
-    Views: Record<string, never>
-    Functions: {
-      registrar_movimentacao_estoque: {
-        Args: {
-          p_produto_id: string
-          p_tipo: TipoMovimentacao
-          p_quantidade: number
-          p_motivo: string | null
-        }
-        Returns: void
-      }
-      finalizar_venda: {
-        Args: {
-          p_itens: { produto_id: string; quantidade: number; preco_unitario: number }[]
-          p_forma_pagamento: FormaPagamento
-        }
-        Returns: string
-      }
-      concluir_producao: {
-        Args: {
-          p_producao_id: string
-        }
-        Returns: void
-      }
-    }
-  }
+export type Papel = 'dono' | 'admin' | 'funcionario'
+
+export type Turno = 'manha' | 'tarde' | 'noite' | 'madrugada' | 'integral'
+
+export type EnderecoCadastro = {
+  cep: string
+  logradouro: string
+  numero: string
+  complemento: string
+  bairro: string
+  cidade: string
+  uf: string
+}
+
+export type ContatoEmergencia = { nome: string; parentesco: string; telefone: string }
+
+// Cadastro completo de uma pessoa (o que não foi preenchido vem null).
+export type DadosCadastro = {
+  telefone: string | null
+  cpf: string | null
+  data_nascimento: string | null
+  data_admissao: string | null
+  turno: Turno | null
+  endereco: EnderecoCadastro | null
+  contato_emergencia: ContatoEmergencia | null
+  observacoes?: string | null
+}
+
+// GET/PUT /api/padaria
+export type DadosPadaria = {
+  nome_fantasia: string
+  razao_social: string | null
+  cnpj: string | null
+  inscricao_estadual: string | null
+  telefone: string | null
+  whatsapp: string | null
+  email: string | null
+  instagram: string | null
+  horario: string | null
+  endereco: EnderecoCadastro | null
+  mensagem_comprovante: string | null
+}
+
+// Linha de GET /api/equipe/resumo: desempenho de um membro no período + cadastro completo.
+export type ResumoMembro = DadosCadastro & {
+  created_at: string
+  id: string
+  nome: string
+  email: string
+  papel: Papel
+  cargo: string
+  foto: string | null
+  ativo: boolean
+  ultimo_acesso: string | null
+  ultima_atividade: string | null
+  vendas: number
+  total_vendas: number
+  movimentacoes: number
+  producoes: number
+  vendido_hoje: number
+  recorde_dia: number
+}
+
+// Linha de GET /api/equipe/atividade.
+export type AtividadeEquipe = {
+  tipo: 'venda' | 'estoque' | 'producao'
+  id: string
+  quando: string
+  usuario_id: string | null
+  usuario_nome: string | null
+  detalhe: string | null
+  produto: string | null
+  quantidade: number | null
+  unidade: string | null
+  valor: number | null
+}
+
+// GET /api/conquistas: base das comemorações de meta e recorde de quem está logado.
+export type Conquistas = {
+  meta: number
+  vendidoHoje: number
+  vendasHoje: number
+  recordeAnterior: number
+}
+
+// GET /api/time: mural da equipe (todos veem). posicao = lugar no ranking de vendas do período.
+export type MembroMural = {
+  id: string
+  nome: string
+  cargo: string
+  papel: Papel
+  foto: string | null
+  created_at: string
+  vendas: number
+  total_vendas: number
+  vendido_hoje: number
+  primeira_venda_hoje: string | null
+  // O que vendeu no período, por produto (base dos destaques por tipo).
+  produtos: { nome: string; categoria: string | null; total: number; quantidade: number }[]
+  posicao: number | null
+  promovido_em: string | null
+  promovido_para: string | null
+}
+
+export type MuralEquipe = {
+  meta: number
+  membros: MembroMural[]
+}
+
+// GET /api/time/novidades: mudanças de perfil (dono e gerência).
+export type NovidadePerfil = {
+  id: string
+  usuario_id: string
+  usuario_nome: string
+  usuario_foto: string | null
+  campo: 'nome' | 'cargo' | 'papel' | 'foto'
+  valor_antigo: string | null
+  valor_novo: string | null
+  alterado_por: string | null
+  alterado_por_nome: string | null
+  created_at: string
+}
+
+// GET /api/vendas/historico: uma linha do histórico.
+export type VendaHistorico = {
+  id: string
+  total: number
+  forma_pagamento: FormaPagamento
+  valor_recebido: number | null
+  created_at: string
+  created_by: string | null
+  // devolvida: continua no histórico, mas não soma nos totais (o estoque já voltou).
+  status: 'concluida' | 'devolvida'
+  vendedor_nome: string | null
+  qtd_itens: number
+  // Nomes dos produtos, do mais caro para o mais barato.
+  resumo: string | null
+}
+
+export type PaginaHistorico = {
+  vendas: VendaHistorico[]
+  temMais: boolean
+  // Só na primeira página.
+  totais: {
+    quantidade: number
+    total: number
+    devolvidas: number
+    total_devolvido: number
+  } | null
+}
+
+// GET /api/vendas/:id
+export type VendaDetalhe = Omit<VendaHistorico, 'qtd_itens' | 'resumo'> & {
+  vendedor_foto: string | null
+  devolvida_em: string | null
+  devolvida_por_nome: string | null
+  motivo_devolucao: string | null
+  itens: {
+    id: string
+    nome: string
+    categoria: string | null
+    unidade: string
+    quantidade: number
+    preco_unitario: number
+    subtotal: number
+  }[]
 }

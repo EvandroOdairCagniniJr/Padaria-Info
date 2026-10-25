@@ -22,3 +22,6 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Configuração local do servidor (senha do MySQL etc.)
+.env
