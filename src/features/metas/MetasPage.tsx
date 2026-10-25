@@ -35,6 +35,7 @@ import {
   type ValoresMeta,
 } from '@/features/metas/api'
 import { formatBRL, mensagemErro } from '@/lib/format'
+import { useContagem } from '@/lib/useContagem'
 import { cn } from '@/lib/utils'
 
 const periodos: { key: PeriodoMeta; titulo: string; curto: string; icone: typeof Sun }[] = [
@@ -187,7 +188,9 @@ function CartaoMeta({
         <periodo.icone className="size-4" />
         {periodo.titulo}
       </p>
-      <p className="mt-1 font-heading text-3xl font-bold tabular-nums">{formatBRL(vendido)}</p>
+      <p className="mt-1 font-heading text-3xl font-bold tabular-nums">
+        <Contagem valor={vendido} />
+      </p>
       {meta == null ? (
         <p className="mt-2 text-sm text-muted-foreground">Sem meta definida</p>
       ) : (
@@ -224,7 +227,10 @@ function Barra({ pct, atingida, className }: { pct: number; atingida: boolean; c
   return (
     <div className={cn('overflow-hidden rounded-full bg-muted', className)}>
       <div
-        className={cn('h-full rounded-full transition-all', atingida ? 'bg-emerald-500' : 'bg-primary')}
+        className={cn(
+          'barra-enche h-full rounded-full transition-all duration-700',
+          atingida ? 'bg-emerald-500' : 'bg-primary',
+        )}
         style={{ width: `${Math.min(100, pct)}%` }}
       />
     </div>
@@ -413,4 +419,8 @@ function DialogMetas({
       </DialogContent>
     </Dialog>
   )
+}
+
+function Contagem({ valor }: { valor: number }) {
+  return <>{formatBRL(useContagem(valor))}</>
 }

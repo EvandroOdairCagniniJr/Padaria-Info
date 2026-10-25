@@ -16,7 +16,7 @@ import {
   X,
 } from 'lucide-react'
 import { Suspense, useEffect, useState } from 'react'
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { BoasVindas } from '@/app/BoasVindas'
 import { Avatar } from '@/components/Avatar'
@@ -68,6 +68,9 @@ export function MainLayout() {
   // Gaveta do menu em telas pequenas.
   const [menuAberto, setMenuAberto] = useState(false)
   const [perfilAberto, setPerfilAberto] = useState(false)
+  // Cada clique na conta remonta a foto e dispara o "pulo" + anel (ver index.css).
+  const [cliquesConta, setCliquesConta] = useState(0)
+  const { pathname } = useLocation()
   // Dono e gerência: mudanças de perfil que ainda não viram (aparece no item Equipe).
   const novidades = useNovidadesNaoVistas()
 
@@ -116,13 +119,31 @@ export function MainLayout() {
           <button
             type="button"
             onClick={() => {
-              setMenuAberto(false)
-              setPerfilAberto(true)
+              setCliquesConta((n) => n + 1)
+              // Dá tempo de ver a foto pular antes de a janela do perfil abrir.
+              setTimeout(() => {
+                setMenuAberto(false)
+                setPerfilAberto(true)
+              }, 260)
             }}
             title="Editar perfil"
-            className="mb-1 flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left hover:bg-sidebar-accent"
+            className="group mb-1 flex w-full items-center gap-2.5 rounded-lg p-1.5 text-left transition-colors hover:bg-sidebar-accent active:scale-[0.98]"
           >
-            <Avatar nome={user.nome || user.email} foto={user.foto} tamanho="md" />
+            <span
+              key={cliquesConta}
+              className={cn(
+                'relative shrink-0 transition-transform group-hover:scale-105',
+                cliquesConta > 0 && 'conta-pulo',
+              )}
+            >
+              {cliquesConta > 0 && (
+                <span
+                  aria-hidden
+                  className="conta-anel pointer-events-none absolute inset-0 rounded-full ring-2 ring-sidebar-primary"
+                />
+              )}
+              <Avatar nome={user.nome || user.email} foto={user.foto} tamanho="md" />
+            </span>
             <div className="min-w-0 flex-1">
               <div className="truncate text-sm font-medium">{user.nome || user.email}</div>
               <div className="truncate text-xs text-sidebar-foreground/60">
@@ -195,7 +216,10 @@ export function MainLayout() {
           }
         >
           <BoasVindas />
-          <Outlet />
+          {/* key: cada troca de tela reapresenta o conteúdo com uma entrada suave. */}
+          <div key={pathname} className="tela-entra flex min-h-0 flex-1 flex-col">
+            <Outlet />
+          </div>
         </Suspense>
         <PerfilDialog open={perfilAberto} onOpenChange={setPerfilAberto} />
       </main>

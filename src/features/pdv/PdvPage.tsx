@@ -16,6 +16,7 @@ import { toast } from 'sonner'
 import { Avatar } from '@/components/Avatar'
 import { IconeCategoria, IconeProduto } from '@/components/IconeProduto'
 import { Button } from '@/components/ui/button'
+import { VendaConcluida } from '@/components/VendaConcluida'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/AuthContext'
@@ -24,7 +25,8 @@ import { lojaDoComprovante, usePadaria } from '@/features/padaria/api'
 import { ComprovanteDialog } from '@/features/pdv/ComprovanteDialog'
 import type { Comprovante } from '@/features/pdv/comprovante'
 import { useProdutos } from '@/features/produtos/api'
-import { formatBRL, formatQuantidade, mensagemErro } from '@/lib/format'
+import { api } from '@/lib/api'
+import { formatBRL, formatQuantidade, inicioDoDiaISO, mensagemErro } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import type { FormaPagamento, Produto } from '@/types/database'
 
@@ -73,6 +75,10 @@ export function PdvPage() {
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('dinheiro')
   const [recebido, setRecebido] = useState('')
   const [comprovante, setComprovante] = useState<Comprovante | null>(null)
+  // Comemoração da venda: aparece antes do comprovante.
+  const [celebracao, setCelebracao] = useState<{ total: number; bateuMeta: boolean } | null>(
+    null,
+  )
   const [carrinhoMobileAberto, setCarrinhoMobileAberto] = useState(false)
 
   const categorias = useMemo(
@@ -181,7 +187,16 @@ export function PdvPage() {
         atendente: user?.nome || null,
         loja: lojaDoComprovante(padaria.data),
       })
-      toast.success(`Venda de ${formatBRL(venda.total)} registrada`)
+      // Esta venda fez a pessoa passar da meta do dia? (falha aqui não atrapalha a venda)
+      const c = await api
+        .get<{ meta: number; vendidoHoje: number }>(
+          `/conquistas?desde=${encodeURIComponent(inicioDoDiaISO())}`,
+        )
+        .catch(() => null)
+      const bateuMeta = Boolean(
+        c && c.meta > 0 && c.vendidoHoje >= c.meta && c.vendidoHoje - venda.total < c.meta,
+      )
+      setCelebracao({ total: venda.total, bateuMeta })
       limparPedido()
       setCarrinhoMobileAberto(false)
     } catch (err) {
@@ -379,9 +394,16 @@ export function PdvPage() {
         </DialogContent>
       </Dialog>
 
+      {celebracao && (
+        <VendaConcluida
+          total={celebracao.total}
+          bateuMeta={celebracao.bateuMeta}
+          onFim={() => setCelebracao(null)}
+        />
+      )}
       <ComprovanteDialog
         key={comprovante?.vendaId}
-        comprovante={comprovante}
+        comprovante={celebracao ? null : comprovante}
         onClose={() => {
           setComprovante(null)
           buscaRef.current?.focus()
@@ -529,7 +551,10 @@ function CarrinhoPainel({
         <div className="rounded-lg border bg-card p-3" aria-live="polite">
           <div className="flex items-baseline justify-between gap-2">
             <span className="text-sm text-muted-foreground">Total</span>
-            <span className="font-heading text-3xl font-bold tabular-nums">{formatBRL(total)}</span>
+            {/* key: cada mudança no total recria o número e dispara o "pulo". */}
+            <span key={total} className="total-pulso font-heading text-3xl font-bold tabular-nums">
+              {formatBRL(total)}
+            </span>
           </div>
           {troco !== null && !vazio && (
             <div
