@@ -256,6 +256,8 @@ export type MembroMural = {
   vendas: number
   total_vendas: number
   vendido_hoje: number
+  // Meta do dia desta pessoa (individual ou padrão da equipe); 0 = sem meta.
+  meta_dia: number
   primeira_venda_hoje: string | null
   // O que vendeu no período, por produto (base dos destaques por tipo).
   produtos: { nome: string; categoria: string | null; total: number; quantidade: number }[]

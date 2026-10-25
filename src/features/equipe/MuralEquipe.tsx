@@ -140,7 +140,6 @@ export function MuralEquipe({
   const [aberto, setAberto] = useState<MembroMural | null>(null)
 
   const membros = useMemo(() => mural.data?.membros ?? [], [mural.data])
-  const meta = mural.data?.meta ?? 0
   const agora = mural.dataUpdatedAt
   const destaques = useMemo(() => calcularDestaques(membros), [membros])
 
@@ -224,8 +223,8 @@ export function MuralEquipe({
               <CartaoMembro
                 key={m.id}
                 membro={m}
-                meta={meta}
-                selos={selosDoMembro(m, destaques, meta, agora).filter((s) => s.id !== 'posicao')}
+                meta={m.meta_dia}
+                selos={selosDoMembro(m, destaques, m.meta_dia, agora).filter((s) => s.id !== 'posicao')}
                 ehVoce={m.id === user?.id}
                 onAbrir={() => setAberto(m)}
               />
@@ -236,8 +235,10 @@ export function MuralEquipe({
 
       <DetalheMembro
         membro={membroAberto}
-        selos={membroAberto ? selosDoMembro(membroAberto, destaques, meta, agora) : []}
-        meta={meta}
+        selos={
+          membroAberto ? selosDoMembro(membroAberto, destaques, membroAberto.meta_dia, agora) : []
+        }
+        meta={membroAberto?.meta_dia ?? 0}
         periodoLabel={periodoLabel}
         onFechar={() => setAberto(null)}
       />

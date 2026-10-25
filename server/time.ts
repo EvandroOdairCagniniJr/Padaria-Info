@@ -3,7 +3,8 @@
 import { Router } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
 import { exigirPapel } from './auth.ts'
-import { lerConfig, pool } from './db.ts'
+import { pool } from './db.ts'
+import { lerMetas, metaDaPessoa } from './metas.ts'
 import { HttpError } from './http.ts'
 
 export const timeRouter = Router()
@@ -70,6 +71,7 @@ timeRouter.get('/', async (req, res) => {
     produtosPorMembro.set(i.usuario_id, lista)
   }
 
+  const metas = await lerMetas(res.locals.padariaId)
   let posicao = 0
   const membros = rows.map((r) => {
     const total = Number(r.total_vendas)
@@ -84,6 +86,8 @@ timeRouter.get('/', async (req, res) => {
       vendas: Number(r.vendas),
       total_vendas: total,
       vendido_hoje: Number(r.vendido_hoje),
+      // Meta do dia desta pessoa (individual ou o padrão da equipe); 0 = sem meta.
+      meta_dia: metaDaPessoa(metas, r.id, 'dia') ?? 0,
       primeira_venda_hoje: r.primeira_venda_hoje,
       produtos: produtosPorMembro.get(r.id) ?? [],
       // Só entra no pódio quem vendeu no período.
@@ -94,10 +98,7 @@ timeRouter.get('/', async (req, res) => {
     }
   })
 
-  res.json({
-    meta: Number(await lerConfig(res.locals.padariaId, 'meta_diaria_vendas', '500')),
-    membros,
-  })
+  res.json({ meta: metas.get('pessoa')?.dia ?? 0, membros })
 })
 
 timeRouter.get('/novidades', exigirPapel('dono', 'admin'), async (_req, res) => {

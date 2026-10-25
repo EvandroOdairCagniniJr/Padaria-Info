@@ -202,3 +202,13 @@ create table if not exists categorias_fotos (
   foto mediumtext not null,
   primary key (padaria_id, nome)
 );
+
+-- Metas de vendas definidas pelo dono. alvo: 'geral' (a padaria toda), 'pessoa' (padrão para
+-- cada membro da equipe) ou o id de um usuário (meta individual, vale no lugar do padrão).
+create table if not exists metas (
+  padaria_id char(36) not null,
+  alvo varchar(36) not null,
+  periodo enum('dia', 'semana', 'mes') not null,
+  valor decimal(12, 2) not null check (valor > 0),
+  primary key (padaria_id, alvo, periodo)
+);

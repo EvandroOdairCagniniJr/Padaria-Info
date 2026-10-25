@@ -2,7 +2,8 @@ import { randomUUID } from 'node:crypto'
 import { Router, type Response } from 'express'
 import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
-import { lerConfig, pool, transaction } from './db.ts'
+import { pool, transaction } from './db.ts'
+import { lerMetas, metaDaPessoa } from './metas.ts'
 import { exigirPapel, fotoSchema } from './auth.ts'
 import { HttpError, validar } from './http.ts'
 
@@ -709,7 +710,7 @@ apiRouter.get('/conquistas', async (req, res) => {
     ),
   ])
   res.json({
-    meta: Number(await lerConfig(padariaId(res), 'meta_diaria_vendas', '500')),
+    meta: metaDaPessoa(await lerMetas(padariaId(res)), userId, 'dia') ?? 0,
     vendidoHoje: Number(hoje[0].total),
     vendasHoje: Number(hoje[0].vendas),
     recordeAnterior: Number(recorde[0].recorde),

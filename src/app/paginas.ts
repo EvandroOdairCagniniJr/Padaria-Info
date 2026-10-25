@@ -16,6 +16,7 @@ export const paginas = {
   padaria: () =>
     import('@/features/padaria/MinhaPadariaPage').then((m) => ({ default: m.MinhaPadariaPage })),
   guia: () => import('@/features/guia/GuiaPage').then((m) => ({ default: m.GuiaPage })),
+  metas: () => import('@/features/metas/MetasPage').then((m) => ({ default: m.MetasPage })),
   equipe: () => import('@/features/equipe/EquipePage').then((m) => ({ default: m.EquipePage })),
 }
 

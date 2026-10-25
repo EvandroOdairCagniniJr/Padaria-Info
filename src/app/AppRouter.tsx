@@ -17,6 +17,7 @@ const ProducaoPage = lazy(paginas.producao)
 const GuiaPage = lazy(paginas.guia)
 const EquipePage = lazy(paginas.equipe)
 const MinhaPadariaPage = lazy(paginas.padaria)
+const MetasPage = lazy(paginas.metas)
 
 const carregando = (
   <div className="flex min-h-svh items-center justify-center">
@@ -45,6 +46,7 @@ export function AppRouter() {
             <Route path="producao" element={<ProducaoPage />} />
             <Route path="guia" element={<GuiaPage />} />
             <Route path="equipe" element={<EquipePage />} />
+            <Route path="metas" element={<MetasPage />} />
 
             <Route element={<RequirePapel papeis={['dono', 'admin']} />}>
               <Route index element={<DashboardPage />} />

@@ -4,7 +4,7 @@ import { Router, type Request } from 'express'
 import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { cargoSchema, exigirPapel, fotoSchema, hashSenha, senhaSchema } from './auth.ts'
-import { pool, salvarConfig } from './db.ts'
+import { pool } from './db.ts'
 import { dadosPessoaisSchema, dadosTrabalhoSchema, garantirCpfUnico } from './cadastro.ts'
 import { HttpError, validar } from './http.ts'
 import { alterarPerfil } from './perfil.ts'
@@ -200,14 +200,4 @@ equipeRouter.get('/atividade', async (req, res) => {
     [p, p, p, usuarioId, usuarioId, limite],
   )
   res.json(rows)
-})
-
-// Meta diária de vendas por pessoa (0 desliga as comemorações de meta).
-equipeRouter.put('/meta', async (req, res) => {
-  const { meta } = validar(
-    z.object({ meta: z.number().min(0, 'Meta inválida').max(1_000_000, 'Meta muito alta') }),
-    req.body,
-  )
-  await salvarConfig(res.locals.padariaId, 'meta_diaria_vendas', String(meta))
-  res.json({ meta })
 })

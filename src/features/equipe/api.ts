@@ -119,13 +119,3 @@ export function useAlterarMembro() {
   })
 }
 
-export function useSalvarMeta() {
-  const queryClient = useQueryClient()
-  return useMutation({
-    mutationFn: (meta: number) => api.put('/equipe/meta', { meta }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: EQUIPE_KEY })
-      queryClient.invalidateQueries({ queryKey: ['conquistas'] })
-    },
-  })
-}
