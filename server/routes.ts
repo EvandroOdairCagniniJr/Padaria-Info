@@ -146,7 +146,7 @@ apiRouter.put('/categorias/foto', gestao, async (req, res) => {
 
 type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
 
-async function registrarMovimentacao(
+export async function registrarMovimentacao(
   conn: PoolConnection,
   padaria: string,
   produtoId: string,

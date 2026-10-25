@@ -212,3 +212,19 @@ create table if not exists metas (
   valor decimal(12, 2) not null check (valor > 0),
   primary key (padaria_id, alvo, periodo)
 );
+
+-- Perdas: o que foi para o lixo (sobra do dia, vencido, queimado...). Também baixa o estoque
+-- (movimentação 'saida' com motivo 'perda'). custo_unitario = preço de custo no momento.
+create table if not exists perdas (
+  id char(36) primary key,
+  padaria_id char(36) not null,
+  produto_id char(36) not null,
+  quantidade decimal(10, 3) not null check (quantidade > 0),
+  motivo enum('sobra', 'vencido', 'queimado', 'quebra', 'outro') not null,
+  observacao varchar(255),
+  custo_unitario decimal(10, 2) not null default 0,
+  created_by char(36),
+  created_at timestamp not null default current_timestamp,
+  index perdas_padaria_data_idx (padaria_id, created_at),
+  foreign key (produto_id) references produtos (id)
+);

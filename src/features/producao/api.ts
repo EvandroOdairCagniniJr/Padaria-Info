@@ -96,3 +96,103 @@ export function useConcluirProducao() {
     },
   })
 }
+
+// ---------------------------------------------------------------- Sugestão e perdas
+
+export type SugestaoProducao = {
+  produto_id: string
+  nome: string
+  unidade: string
+  categoria: string | null
+  media_vendida: number
+  media_perdida: number
+  taxa_sobra: number
+  estoque: number
+  sugestao: number
+  motivo: string
+  // Quantas das 4 semanas analisadas já tinham o produto.
+  semanas: number
+  receita_id: string | null
+  receita_nome: string | null
+  rendimento: number | null
+  fornadas: number | null
+}
+
+export function useSugestaoProducao(inicio: string) {
+  return useQuery({
+    queryKey: ['producao', 'sugestao', inicio],
+    queryFn: () =>
+      api.get<SugestaoProducao[]>(`/producao/sugestao?inicio=${encodeURIComponent(inicio)}`),
+    refetchInterval: false,
+  })
+}
+
+export type MotivoPerda = 'sobra' | 'vencido' | 'queimado' | 'quebra' | 'outro'
+
+export type Perda = {
+  id: string
+  produto_id: string
+  nome: string
+  unidade: string
+  categoria: string | null
+  quantidade: number
+  motivo: MotivoPerda
+  observacao: string | null
+  custo_unitario: number
+  created_at: string
+  registrado_por: string | null
+}
+
+export type ResumoPerdas = {
+  perdas: Perda[]
+  resumo: {
+    custo: number
+    porMotivo: { motivo: MotivoPerda; custo: number; registros: number }[]
+    produtos: {
+      id: string
+      nome: string
+      unidade: string
+      categoria: string | null
+      perdido: number
+      vendido: number
+      custo: number
+      taxa: number
+    }[]
+  }
+}
+
+export function usePerdas(desde: string, ate: string) {
+  return useQuery({
+    queryKey: ['perdas', desde, ate],
+    queryFn: () =>
+      api.get<ResumoPerdas>(
+        `/perdas?desde=${encodeURIComponent(desde)}&ate=${encodeURIComponent(ate)}`,
+      ),
+  })
+}
+
+function invalidarPerdas(queryClient: ReturnType<typeof useQueryClient>) {
+  queryClient.invalidateQueries({ queryKey: ['perdas'] })
+  queryClient.invalidateQueries({ queryKey: ['produtos'] })
+  queryClient.invalidateQueries({ queryKey: ['producao', 'sugestao'] })
+}
+
+export function useRegistrarPerda() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (dados: {
+      itens: { produto_id: string; quantidade: number }[]
+      motivo: MotivoPerda
+      observacao?: string | null
+    }) => api.post('/perdas', dados),
+    onSuccess: () => invalidarPerdas(queryClient),
+  })
+}
+
+export function useDesfazerPerda() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: (id: string) => api.delete(`/perdas/${id}`),
+    onSuccess: () => invalidarPerdas(queryClient),
+  })
+}
