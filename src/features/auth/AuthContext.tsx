@@ -5,6 +5,7 @@ import type { Papel } from '@/types/database'
 
 export interface Usuario {
   id: string
+  padaria_id: string
   nome: string
   email: string
   papel: Papel
@@ -33,7 +34,7 @@ interface AuthContextValue {
     codigo: string,
     novaSenha?: string,
   ) => Promise<{ error: string | null }>
-  // Primeiro acesso: conta do dono + dados da padaria (POST /api/auth/setup).
+  // Cadastrar minha padaria: conta do dono + dados da padaria (POST /api/auth/setup).
   primeiroAcesso: (dados: Record<string, unknown>) => Promise<{ error: string | null }>
   signOut: () => Promise<void>
   // Editar perfil: salva no servidor e já atualiza o nome/foto no menu.

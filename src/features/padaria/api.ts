@@ -54,3 +54,21 @@ export function lojaDoComprovante(p: DadosPadaria | null | undefined): Loja {
     mensagem: p.mensagem_comprovante,
   }
 }
+
+// Código de convite: o funcionário informa em "Criar conta" para pedir acesso à equipe.
+export function useConvite(ativo: boolean) {
+  return useQuery({
+    queryKey: ['padaria', 'convite'],
+    queryFn: () => api.get<{ codigo: string | null }>('/padaria/convite'),
+    enabled: ativo,
+    refetchInterval: false,
+  })
+}
+
+export function useNovoConvite() {
+  const queryClient = useQueryClient()
+  return useMutation({
+    mutationFn: () => api.post<{ codigo: string }>('/padaria/convite'),
+    onSuccess: (dados) => queryClient.setQueryData(['padaria', 'convite'], dados),
+  })
+}

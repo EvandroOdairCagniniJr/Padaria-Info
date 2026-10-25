@@ -35,7 +35,7 @@ export async function alterarPerfil(
 
   await transaction(async (conn) => {
     const [rows] = await conn.query<RowDataPacket[]>(
-      'select nome, cargo, papel, foto from usuarios where id = ? for update',
+      'select padaria_id, nome, cargo, papel, foto from usuarios where id = ? for update',
       [usuarioId],
     )
     const antes = rows[0]
@@ -53,10 +53,12 @@ export async function alterarPerfil(
       // A foto em si não vai para o histórico (é grande); só o aviso de que mudou.
       const ehFoto = campo === 'foto'
       await conn.query(
-        `insert into historico_perfil (id, usuario_id, campo, valor_antigo, valor_novo, alterado_por)
-         values (?, ?, ?, ?, ?, ?)`,
+        `insert into historico_perfil
+           (id, padaria_id, usuario_id, campo, valor_antigo, valor_novo, alterado_por)
+         values (?, ?, ?, ?, ?, ?, ?)`,
         [
           randomUUID(),
+          antes.padaria_id,
           usuarioId,
           campo,
           ehFoto ? null : antes[campo],

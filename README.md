@@ -32,8 +32,10 @@ claro para a equipe e confiável para quem cuida do negócio.
   conferidas no servidor — não apenas escondidas na tela.
 - **Nada some sem rastro.** Ajustes de estoque, devoluções e alterações de perfil ficam
   registrados com quem fez, quando e por quê.
-- **Funciona na rede da padaria.** Um computador roda o servidor; os demais computadores e
-  celulares só precisam do navegador.
+- **Uma plataforma, muitas padarias.** Cada padaria se cadastra sozinha e tem seus dados
+  completamente isolados das demais — produtos, vendas, equipe e financeiro.
+- **Na internet ou na rede da padaria.** Publicado na nuvem com HTTPS, ou rodando num computador
+  da loja; nos dois casos, basta um navegador.
 - **Com a cara da sua padaria.** O nome cadastrado aparece no topo do sistema e no
   comprovante enviado ao cliente.
 
@@ -54,8 +56,9 @@ claro para a equipe e confiável para quem cuida do negócio.
 
 ### Contas e segurança
 
-- **Entrar ou criar conta** direto na tela de login. Contas novas ficam *aguardando liberação*
-  até o dono aprovar.
+- **Cadastrar minha padaria:** o dono cria a padaria e a própria conta em poucos passos.
+- **Entrar na equipe:** o funcionário cria a conta com o **código de convite** que o dono vê em
+  Equipe, e fica *aguardando liberação* até ser aprovado.
 - **Esqueci minha senha** com código de 6 dígitos enviado por e-mail — válido por 15 minutos,
   de uso único e com limite de tentativas. Com o código, a pessoa entra e pode definir uma
   senha nova na hora.
@@ -94,8 +97,8 @@ npm start
 ```
 
 Abra **http://localhost:3000**. O banco `padaria_info` e as tabelas são criados
-automaticamente. No primeiro acesso, o sistema guia a criação da conta do **dono** e o cadastro
-da padaria; os demais membros entram por **Equipe** ou por **Criar conta**.
+automaticamente. Em **Criar conta → Cadastrar minha padaria**, crie a padaria e a conta do
+**dono**; a equipe entra por **Criar conta → Entrar na equipe**, com o código de convite.
 
 O terminal também mostra o endereço na rede (ex.: `http://192.168.0.10:3000`) para abrir nos
 outros computadores e celulares da padaria.
@@ -105,13 +108,25 @@ outros computadores e celulares da padaria.
 | Variável | Para quê |
 |---|---|
 | `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | Conexão com o MySQL |
-| `JWT_SECRET` | Chave que assina os logins — use um texto longo e aleatório |
+| `JWT_SECRET` | Chave que assina os logins — use um texto longo e aleatório (obrigatória em produção) |
+| `MYSQL_SSL`, `MYSQL_SSL_CA` | Conexão criptografada com MySQL na nuvem |
 | `PORT` | Porta do servidor (padrão `3000`) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envio do código de "Esqueci minha senha" |
 
 > **Gmail:** `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=465` e, em `SMTP_PASS`, uma
 > [senha de app](https://myaccount.google.com/apppasswords) (exige verificação em 2 etapas).
 > Sem SMTP configurado, o código aparece no terminal do servidor.
+
+## ☁️ Publicar na internet
+
+O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://render.com):
+
+1. Crie um MySQL 8 gerenciado (ex.: [Aiven](https://aiven.io/mysql), que tem plano gratuito) e
+   baixe o certificado CA.
+2. No Render: **New → Blueprint** e escolha este repositório.
+3. Preencha as variáveis pedidas: `MYSQL_*`, `MYSQL_SSL_CA` (conteúdo do certificado) e, para o
+   "Esqueci minha senha", as `SMTP_*`. O `JWT_SECRET` é gerado automaticamente.
+4. Pronto: o Render gera o build, aplica o schema no banco e publica com HTTPS.
 
 ## 🧱 Arquitetura
 
@@ -126,6 +141,10 @@ Navegador (React)  ──/api──▶  Servidor Node/Express  ──▶  MySQL 
 | Interface | React 19, TypeScript, Vite, Tailwind CSS 4, shadcn/ui, TanStack Query, React Hook Form + Zod |
 | Servidor | Node.js, Express 5, mysql2, JWT, bcrypt, Nodemailer |
 | Banco | MySQL 8 — schema idempotente aplicado na inicialização (`server/schema.sql`) |
+
+Cada tabela de negócio carrega o `padaria_id`, e toda consulta do servidor filtra pela padaria
+de quem está logado — uma padaria nunca lê nem altera dados de outra. Rotas públicas de login,
+cadastro e recuperação de senha têm limite de tentativas por minuto.
 
 Regras de negócio que mexem em mais de uma tabela (venda, devolução, movimentação de estoque,
 conclusão de produção) rodam em **transações** no servidor. Preços sempre vêm do cadastro,

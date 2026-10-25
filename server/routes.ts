@@ -15,6 +15,24 @@ function usuarioId(res: Response): string {
   return res.locals.usuario.id
 }
 
+// Padaria de quem está logado: TODA consulta de negócio filtra por ela.
+function padariaId(res: Response): string {
+  return res.locals.padariaId
+}
+
+// Garante que os produtos informados são desta padaria (ids vindos do navegador).
+async function garantirProdutos(conn: PoolConnection | typeof pool, padaria: string, ids: string[]) {
+  const unicos = [...new Set(ids)]
+  if (unicos.length === 0) return
+  const [rows] = await conn.query<RowDataPacket[]>(
+    'select count(*) as total from produtos where padaria_id = ? and id in (?)',
+    [padaria, unicos],
+  )
+  if (Number(rows[0].total) !== unicos.length) {
+    throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
+  }
+}
+
 const textoOpcional = z
   .string()
   .nullish()
@@ -23,12 +41,18 @@ const textoOpcional = z
 const dataISO = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, 'Data inválida')
 
 // UPDATE só com as colunas enviadas (o schema já garante quais são permitidas).
-async function atualizar(tabela: string, id: string, campos: Record<string, unknown>) {
+async function atualizar(
+  tabela: string,
+  padaria: string,
+  id: string,
+  campos: Record<string, unknown>,
+) {
   const entradas = Object.entries(campos).filter(([, v]) => v !== undefined)
   if (entradas.length === 0) return
   const [result] = await pool.query<RowDataPacket[] & { affectedRows: number }>(
-    `update ${tabela} set ${entradas.map(([k]) => `\`${k}\` = ?`).join(', ')} where id = ?`,
-    [...entradas.map(([, v]) => v), id],
+    `update ${tabela} set ${entradas.map(([k]) => `\`${k}\` = ?`).join(', ')}
+     where id = ? and padaria_id = ?`,
+    [...entradas.map(([, v]) => v), id, padaria],
   )
   if (result.affectedRows === 0) throw new HttpError(404, 'Registro não encontrado')
 }
@@ -46,7 +70,10 @@ const produtoSchema = z.object({
 })
 
 apiRouter.get('/produtos', async (_req, res) => {
-  const [rows] = await pool.query('select * from produtos where ativo = true order by nome')
+  const [rows] = await pool.query(
+    'select * from produtos where padaria_id = ? and ativo = true order by nome',
+    [padariaId(res)],
+  )
   res.json(rows)
 })
 
@@ -54,10 +81,12 @@ apiRouter.post('/produtos', gestao, async (req, res) => {
   const p = validar(produtoSchema, req.body)
   const id = randomUUID()
   await pool.query(
-    `insert into produtos (id, nome, categoria, unidade, preco_venda, preco_custo, estoque_atual, estoque_minimo)
-     values (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `insert into produtos (id, padaria_id, nome, categoria, unidade, preco_venda, preco_custo,
+       estoque_atual, estoque_minimo)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
+      padariaId(res),
       p.nome,
       p.categoria,
       p.unidade,
@@ -73,19 +102,22 @@ apiRouter.post('/produtos', gestao, async (req, res) => {
 apiRouter.patch('/produtos/:id', gestao, async (req, res) => {
   // estoque_atual só muda por movimentação (histórico), nunca por edição direta.
   const { estoque_atual: _ignorado, ...campos } = validar(produtoSchema.partial(), req.body)
-  await atualizar('produtos', req.params.id, campos)
+  await atualizar('produtos', padariaId(res), req.params.id, campos)
   res.status(204).end()
 })
 
 // Remoção lógica: o produto continua referenciado por vendas e receitas antigas.
 apiRouter.delete('/produtos/:id', gestao, async (req, res) => {
-  await atualizar('produtos', req.params.id, { ativo: false })
+  await atualizar('produtos', padariaId(res), req.params.id, { ativo: false })
   res.status(204).end()
 })
 
 // Fotos das categorias (vitrine do PDV, listas). Só as que têm foto; as demais usam o ícone automático.
 apiRouter.get('/categorias', async (_req, res) => {
-  const [rows] = await pool.query('select nome, foto from categorias order by nome')
+  const [rows] = await pool.query(
+    'select nome, foto from categorias_fotos where padaria_id = ? order by nome',
+    [padariaId(res)],
+  )
   res.json(rows)
 })
 
@@ -96,11 +128,15 @@ apiRouter.put('/categorias/foto', gestao, async (req, res) => {
   )
   if (foto) {
     await pool.query(
-      'insert into categorias (nome, foto) values (?, ?) on duplicate key update foto = values(foto)',
-      [nome, foto],
+      `insert into categorias_fotos (padaria_id, nome, foto) values (?, ?, ?)
+       on duplicate key update foto = values(foto)`,
+      [padariaId(res), nome, foto],
     )
   } else {
-    await pool.query('delete from categorias where nome = ?', [nome])
+    await pool.query('delete from categorias_fotos where padaria_id = ? and nome = ?', [
+      padariaId(res),
+      nome,
+    ])
   }
   res.status(204).end()
 })
@@ -111,6 +147,7 @@ type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
 
 async function registrarMovimentacao(
   conn: PoolConnection,
+  padaria: string,
   produtoId: string,
   tipo: TipoMovimentacao,
   quantidade: number,
@@ -125,14 +162,14 @@ async function registrarMovimentacao(
        when 'entrada' then estoque_atual + ?
        when 'saida' then estoque_atual - ?
        else ? end
-     where id = ?`,
-    [tipo, quantidade, quantidade, quantidade, produtoId],
+     where id = ? and padaria_id = ?`,
+    [tipo, quantidade, quantidade, quantidade, produtoId, padaria],
   )
   if (result.affectedRows === 0) throw new HttpError(404, 'Produto não encontrado')
   await conn.query(
-    `insert into movimentacoes_estoque (id, produto_id, tipo, quantidade, motivo, created_by)
-     values (?, ?, ?, ?, ?, ?)`,
-    [randomUUID(), produtoId, tipo, quantidade, motivo, userId],
+    `insert into movimentacoes_estoque (id, padaria_id, produto_id, tipo, quantidade, motivo, created_by)
+     values (?, ?, ?, ?, ?, ?, ?)`,
+    [randomUUID(), padaria, produtoId, tipo, quantidade, motivo, userId],
   )
 }
 
@@ -147,7 +184,15 @@ apiRouter.post('/estoque/movimentacoes', async (req, res) => {
     req.body,
   )
   await transaction((conn) =>
-    registrarMovimentacao(conn, m.produto_id, m.tipo, m.quantidade, m.motivo, usuarioId(res)),
+    registrarMovimentacao(
+      conn,
+      padariaId(res),
+      m.produto_id,
+      m.tipo,
+      m.quantidade,
+      m.motivo,
+      usuarioId(res),
+    ),
   )
   res.status(204).end()
 })
@@ -160,8 +205,9 @@ apiRouter.get('/vendas', gestao, async (req, res) => {
   const [rows] = await pool.query(
     `select v.*, u.nome as vendedor_nome from vendas v
      left join usuarios u on u.id = v.created_by
-     where v.created_at >= ? and v.status <> 'devolvida' order by v.created_at desc`,
-    [desde],
+     where v.padaria_id = ? and v.created_at >= ? and v.status <> 'devolvida'
+     order by v.created_at desc`,
+    [padariaId(res), desde],
   )
   res.json(rows)
 })
@@ -182,8 +228,8 @@ apiRouter.get('/vendas/historico', async (req, res) => {
     req.query,
   )
 
-  const filtros = ['v.created_at >= ?', 'v.created_at < ?']
-  const params: unknown[] = [q.desde, q.ate]
+  const filtros = ['v.padaria_id = ?', 'v.created_at >= ?', 'v.created_at < ?']
+  const params: unknown[] = [padariaId(res), q.desde, q.ate]
   if (q.forma) {
     filtros.push('v.forma_pagamento = ?')
     params.push(q.forma)
@@ -256,8 +302,8 @@ apiRouter.get('/vendas/:id', async (req, res) => {
             u.nome as vendedor_nome, u.foto as vendedor_foto, d.nome as devolvida_por_nome
      from vendas v left join usuarios u on u.id = v.created_by
      left join usuarios d on d.id = v.devolvida_por
-     where v.id = ?`,
-    [req.params.id],
+     where v.id = ? and v.padaria_id = ?`,
+    [req.params.id, padariaId(res)],
   )
   if (!venda) throw new HttpError(404, 'Venda não encontrada')
   const [itens] = await pool.query(
@@ -281,8 +327,8 @@ apiRouter.post('/vendas/:id/devolver', gestao, async (req, res) => {
   const userId = usuarioId(res)
   await transaction(async (conn) => {
     const [[venda]] = await conn.query<RowDataPacket[]>(
-      'select status from vendas where id = ? for update',
-      [req.params.id],
+      'select status from vendas where id = ? and padaria_id = ? for update',
+      [req.params.id, padariaId(res)],
     )
     if (!venda) throw new HttpError(404, 'Venda não encontrada')
     if (venda.status === 'devolvida') throw new HttpError(409, 'Esta venda já foi devolvida')
@@ -293,6 +339,7 @@ apiRouter.post('/vendas/:id/devolver', gestao, async (req, res) => {
     for (const item of itens) {
       await registrarMovimentacao(
         conn,
+        padariaId(res),
         item.produto_id,
         'entrada',
         Number(item.quantidade),
@@ -329,9 +376,11 @@ apiRouter.post('/vendas', async (req, res) => {
   const resultado = await transaction(async (conn) => {
     const vendaId = randomUUID()
     await conn.query(
-      'insert into vendas (id, total, forma_pagamento, valor_recebido, created_by) values (?, 0, ?, ?, ?)',
+      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by)
+       values (?, ?, 0, ?, ?, ?)`,
       [
         vendaId,
+        padariaId(res),
         venda.forma_pagamento,
         venda.forma_pagamento === 'dinheiro' ? (venda.valor_recebido ?? null) : null,
         userId,
@@ -342,8 +391,8 @@ apiRouter.post('/vendas', async (req, res) => {
     for (const item of venda.itens) {
       if (!(item.quantidade > 0)) throw new HttpError(400, 'Quantidade inválida em um dos itens')
       const [rows] = await conn.query<RowDataPacket[]>(
-        'select nome, preco_venda from produtos where id = ? and ativo = true',
-        [item.produto_id],
+        'select nome, preco_venda from produtos where id = ? and padaria_id = ? and ativo = true',
+        [item.produto_id, padariaId(res)],
       )
       if (!rows[0]) throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
       const preco = Number(rows[0].preco_venda)
@@ -355,7 +404,15 @@ apiRouter.post('/vendas', async (req, res) => {
          values (?, ?, ?, ?, ?, ?)`,
         [randomUUID(), vendaId, item.produto_id, item.quantidade, preco, subtotal],
       )
-      await registrarMovimentacao(conn, item.produto_id, 'saida', item.quantidade, 'venda', userId)
+      await registrarMovimentacao(
+        conn,
+        padariaId(res),
+        item.produto_id,
+        'saida',
+        item.quantidade,
+        'venda',
+        userId,
+      )
     }
 
     total = Math.round(total * 100) / 100
@@ -381,7 +438,9 @@ const contaSchema = z.object({
 
 apiRouter.get('/contas', gestao, async (_req, res) => {
   const [rows] = await pool.query(
-    "select * from contas_financeiras where status <> 'cancelado' order by data_vencimento",
+    `select * from contas_financeiras where padaria_id = ? and status <> 'cancelado'
+     order by data_vencimento`,
+    [padariaId(res)],
   )
   res.json(rows)
 })
@@ -391,10 +450,12 @@ apiRouter.post('/contas', gestao, async (req, res) => {
   const id = randomUUID()
   await pool.query(
     `insert into contas_financeiras
-       (id, tipo, descricao, categoria, valor, data_vencimento, forma_pagamento, observacoes, created_by)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+       (id, padaria_id, tipo, descricao, categoria, valor, data_vencimento, forma_pagamento,
+        observacoes, created_by)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
+      padariaId(res),
       c.tipo,
       c.descricao,
       c.categoria,
@@ -409,18 +470,29 @@ apiRouter.post('/contas', gestao, async (req, res) => {
 })
 
 apiRouter.patch('/contas/:id', gestao, async (req, res) => {
-  await atualizar('contas_financeiras', req.params.id, validar(contaSchema.partial(), req.body))
+  await atualizar(
+    'contas_financeiras',
+    padariaId(res),
+    req.params.id,
+    validar(contaSchema.partial(), req.body),
+  )
   res.status(204).end()
 })
 
 apiRouter.post('/contas/:id/pagar', gestao, async (req, res) => {
   const { data_pagamento } = validar(z.object({ data_pagamento: dataISO }), req.body)
-  await atualizar('contas_financeiras', req.params.id, { status: 'pago', data_pagamento })
+  await atualizar('contas_financeiras', padariaId(res), req.params.id, {
+    status: 'pago',
+    data_pagamento,
+  })
   res.status(204).end()
 })
 
 apiRouter.delete('/contas/:id', gestao, async (req, res) => {
-  await pool.query('delete from contas_financeiras where id = ?', [req.params.id])
+  await pool.query('delete from contas_financeiras where id = ? and padaria_id = ?', [
+    req.params.id,
+    padariaId(res),
+  ])
   res.status(204).end()
 })
 
@@ -442,34 +514,41 @@ const receitaSchema = z.object({
 })
 
 apiRouter.get('/receitas', async (_req, res) => {
-  const [rows] = await pool.query('select * from receitas order by nome')
+  const [rows] = await pool.query('select * from receitas where padaria_id = ? order by nome', [
+    padariaId(res),
+  ])
   res.json(rows)
 })
 
 apiRouter.get('/receita-itens', async (req, res) => {
   const receitaId = typeof req.query.receita_id === 'string' ? req.query.receita_id : null
-  const [rows] = receitaId
-    ? await pool.query('select * from receita_itens where receita_id = ?', [receitaId])
-    : await pool.query('select * from receita_itens')
+  const [rows] = await pool.query(
+    `select i.* from receita_itens i join receitas r on r.id = i.receita_id
+     where r.padaria_id = ? and (? is null or i.receita_id = ?)`,
+    [padariaId(res), receitaId, receitaId],
+  )
   res.json(rows)
 })
 
 // Receita + ingredientes sempre gravados juntos (ou nada é gravado).
-async function salvarReceita(id: string | null, body: unknown) {
+async function salvarReceita(padaria: string, id: string | null, body: unknown) {
   const r = validar(receitaSchema, body)
   return transaction(async (conn) => {
+    await garantirProdutos(conn, padaria, [r.produto_id, ...r.itens.map((i) => i.ingrediente_id)])
     const receitaId = id ?? randomUUID()
     if (id) {
       const [result] = await conn.query<RowDataPacket[] & { affectedRows: number }>(
-        'update receitas set produto_id = ?, nome = ?, rendimento = ?, modo_preparo = ? where id = ?',
-        [r.produto_id, r.nome, r.rendimento, r.modo_preparo, id],
+        `update receitas set produto_id = ?, nome = ?, rendimento = ?, modo_preparo = ?
+         where id = ? and padaria_id = ?`,
+        [r.produto_id, r.nome, r.rendimento, r.modo_preparo, id, padaria],
       )
       if (result.affectedRows === 0) throw new HttpError(404, 'Receita não encontrada')
       await conn.query('delete from receita_itens where receita_id = ?', [id])
     } else {
       await conn.query(
-        'insert into receitas (id, produto_id, nome, rendimento, modo_preparo) values (?, ?, ?, ?, ?)',
-        [receitaId, r.produto_id, r.nome, r.rendimento, r.modo_preparo],
+        `insert into receitas (id, padaria_id, produto_id, nome, rendimento, modo_preparo)
+         values (?, ?, ?, ?, ?, ?)`,
+        [receitaId, padaria, r.produto_id, r.nome, r.rendimento, r.modo_preparo],
       )
     }
     for (const item of r.itens) {
@@ -483,16 +562,21 @@ async function salvarReceita(id: string | null, body: unknown) {
 }
 
 apiRouter.post('/receitas', gestao, async (req, res) => {
-  res.status(201).json({ id: await salvarReceita(null, req.body) })
+  res.status(201).json({ id: await salvarReceita(padariaId(res), null, req.body) })
 })
 
 apiRouter.put('/receitas/:id', gestao, async (req, res) => {
-  res.json({ id: await salvarReceita(req.params.id, req.body) })
+  res.json({ id: await salvarReceita(padariaId(res), req.params.id, req.body) })
 })
 
 // Produções só planejadas saem junto; com produção concluída a receita fica (é histórico de estoque).
 apiRouter.delete('/receitas/:id', gestao, async (req, res) => {
   await transaction(async (conn) => {
+    const [receita] = await conn.query<RowDataPacket[]>(
+      'select 1 from receitas where id = ? and padaria_id = ? for update',
+      [req.params.id, padariaId(res)],
+    )
+    if (!receita[0]) throw new HttpError(404, 'Receita não encontrada')
     const [concluidas] = await conn.query<RowDataPacket[]>(
       "select 1 from producoes where receita_id = ? and status = 'concluido' limit 1",
       [req.params.id],
@@ -509,7 +593,10 @@ apiRouter.delete('/receitas/:id', gestao, async (req, res) => {
 // ---------------------------------------------------------------- Produção
 
 apiRouter.get('/producoes', async (_req, res) => {
-  const [rows] = await pool.query('select * from producoes order by data desc, created_at desc')
+  const [rows] = await pool.query(
+    'select * from producoes where padaria_id = ? order by data desc, created_at desc',
+    [padariaId(res)],
+  )
   res.json(rows)
 })
 
@@ -522,10 +609,16 @@ apiRouter.post('/producoes', async (req, res) => {
     }),
     req.body,
   )
+  const [receita] = await pool.query<RowDataPacket[]>(
+    'select 1 from receitas where id = ? and padaria_id = ?',
+    [p.receita_id, padariaId(res)],
+  )
+  if (!receita[0]) throw new HttpError(400, 'Receita não encontrada')
   const id = randomUUID()
   await pool.query(
-    'insert into producoes (id, receita_id, data, observacoes, created_by) values (?, ?, ?, ?, ?)',
-    [id, p.receita_id, p.data, p.observacoes, usuarioId(res)],
+    `insert into producoes (id, padaria_id, receita_id, data, observacoes, created_by)
+     values (?, ?, ?, ?, ?, ?)`,
+    [id, padariaId(res), p.receita_id, p.data, p.observacoes, usuarioId(res)],
   )
   res.status(201).json({ id })
 })
@@ -533,8 +626,8 @@ apiRouter.post('/producoes', async (req, res) => {
 // Produção concluída já movimentou o estoque — não pode ser removida.
 apiRouter.delete('/producoes/:id', gestao, async (req, res) => {
   const [result] = await pool.query<RowDataPacket[] & { affectedRows: number }>(
-    "delete from producoes where id = ? and status <> 'concluido'",
-    [req.params.id],
+    "delete from producoes where id = ? and padaria_id = ? and status <> 'concluido'",
+    [req.params.id, padariaId(res)],
   )
   if (result.affectedRows === 0) {
     throw new HttpError(409, 'Produção não encontrada ou já concluída')
@@ -547,8 +640,8 @@ apiRouter.post('/producoes/:id/concluir', async (req, res) => {
   await transaction(async (conn) => {
     // FOR UPDATE: dois cliques simultâneos não dão baixa duas vezes.
     const [producoes] = await conn.query<RowDataPacket[]>(
-      'select receita_id, status from producoes where id = ? for update',
-      [req.params.id],
+      'select receita_id, status from producoes where id = ? and padaria_id = ? for update',
+      [req.params.id, padariaId(res)],
     )
     const producao = producoes[0]
     if (!producao) throw new HttpError(404, 'Produção não encontrada')
@@ -567,6 +660,7 @@ apiRouter.post('/producoes/:id/concluir', async (req, res) => {
     for (const item of itens) {
       await registrarMovimentacao(
         conn,
+        padariaId(res),
         item.ingrediente_id,
         'saida',
         Number(item.quantidade),
@@ -576,6 +670,7 @@ apiRouter.post('/producoes/:id/concluir', async (req, res) => {
     }
     await registrarMovimentacao(
       conn,
+      padariaId(res),
       receitas[0].produto_id,
       'entrada',
       Number(receitas[0].rendimento),
@@ -614,7 +709,7 @@ apiRouter.get('/conquistas', async (req, res) => {
     ),
   ])
   res.json({
-    meta: Number(await lerConfig('meta_diaria_vendas', '500')),
+    meta: Number(await lerConfig(padariaId(res), 'meta_diaria_vendas', '500')),
     vendidoHoje: Number(hoje[0].total),
     vendasHoje: Number(hoje[0].vendas),
     recordeAnterior: Number(recorde[0].recorde),

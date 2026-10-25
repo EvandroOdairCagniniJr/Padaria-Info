@@ -2,7 +2,7 @@
 // Documentos e telefones são guardados só com os dígitos; a máscara é coisa da tela.
 import type { RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
-import { lerConfig, pool, salvarConfig } from './db.ts'
+import { pool } from './db.ts'
 import { HttpError } from './http.ts'
 
 export const digitos = (v: string) => v.replace(/\D/g, '')
@@ -182,16 +182,16 @@ export const padariaSchema = z.object({
 
 export type DadosPadaria = z.output<typeof padariaSchema>
 
-export async function lerPadaria(): Promise<DadosPadaria | null> {
-  const json = await lerConfig('padaria', '')
-  if (!json) return null
-  try {
-    return JSON.parse(json) as DadosPadaria
-  } catch {
-    return null
-  }
+export async function lerPadaria(padariaId: string): Promise<DadosPadaria | null> {
+  const [rows] = await pool.query<RowDataPacket[]>('select dados from padarias where id = ?', [
+    padariaId,
+  ])
+  const dados = rows[0]?.dados
+  if (!dados) return null
+  // mysql2 já devolve a coluna JSON como objeto.
+  return (typeof dados === 'string' ? JSON.parse(dados) : dados) as DadosPadaria
 }
 
-export async function salvarPadaria(dados: DadosPadaria) {
-  await salvarConfig('padaria', JSON.stringify(dados))
+export async function salvarPadaria(padariaId: string, dados: DadosPadaria) {
+  await pool.query('update padarias set dados = ? where id = ?', [JSON.stringify(dados), padariaId])
 }

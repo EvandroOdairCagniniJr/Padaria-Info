@@ -176,3 +176,29 @@ create table if not exists codigos_senha (
   created_at timestamp not null default current_timestamp,
   foreign key (usuario_id) references usuarios (id) on delete cascade
 );
+
+-- Multi-padaria (SaaS): cada padaria tem seus dados; toda tabela de negócio tem padaria_id
+-- (acrescentada em db.ts, colunasNovas). dados = cadastro da padaria (nome, CNPJ...) em JSON.
+-- codigo_convite: o funcionário informa em "Criar conta" para pedir acesso à equipe.
+create table if not exists padarias (
+  id char(36) primary key,
+  dados json not null,
+  codigo_convite char(8) not null unique,
+  created_at timestamp not null default current_timestamp
+);
+
+-- Configurações por padaria (ex.: metas). Substitui a antiga tabela configuracoes.
+create table if not exists padaria_config (
+  padaria_id char(36) not null,
+  chave varchar(60) not null,
+  valor mediumtext not null,
+  primary key (padaria_id, chave)
+);
+
+-- Foto de uma categoria de produto, por padaria. Substitui a antiga tabela categorias.
+create table if not exists categorias_fotos (
+  padaria_id char(36) not null,
+  nome varchar(255) not null,
+  foto mediumtext not null,
+  primary key (padaria_id, nome)
+);

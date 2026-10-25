@@ -37,9 +37,9 @@ timeRouter.get('/', async (req, res) => {
        (select h.created_at ${ultimaPromocao}) as promovido_em,
        (select concat(h.campo, ':', coalesce(h.valor_novo, '')) ${ultimaPromocao}) as promocao
      from usuarios u
-     where u.ativo = true
+     where u.padaria_id = ? and u.ativo = true
      order by total_vendas desc, vendas desc, u.nome`,
-    [desde, desde, hoje, hoje],
+    [desde, desde, hoje, hoje, res.locals.padariaId],
   )
 
   // O que cada um vendeu no período, por produto: base dos adesivos por tipo
@@ -50,9 +50,10 @@ timeRouter.get('/', async (req, res) => {
      from vendas_itens i
      join vendas v on v.id = i.venda_id
      join produtos p on p.id = i.produto_id
-     where v.created_at >= ? and v.created_by is not null and v.status <> 'devolvida'
+     where v.padaria_id = ? and v.created_at >= ? and v.created_by is not null
+       and v.status <> 'devolvida'
      group by v.created_by, p.id, p.nome, p.categoria`,
-    [desde],
+    [res.locals.padariaId, desde],
   )
   const produtosPorMembro = new Map<
     string,
@@ -93,7 +94,10 @@ timeRouter.get('/', async (req, res) => {
     }
   })
 
-  res.json({ meta: Number(await lerConfig('meta_diaria_vendas', '500')), membros })
+  res.json({
+    meta: Number(await lerConfig(res.locals.padariaId, 'meta_diaria_vendas', '500')),
+    membros,
+  })
 })
 
 timeRouter.get('/novidades', exigirPapel('dono', 'admin'), async (_req, res) => {
@@ -103,8 +107,10 @@ timeRouter.get('/novidades', exigirPapel('dono', 'admin'), async (_req, res) => 
      from historico_perfil h
      join usuarios u on u.id = h.usuario_id
      left join usuarios a on a.id = h.alterado_por
+     where u.padaria_id = ?
      order by h.created_at desc
      limit 30`,
+    [res.locals.padariaId],
   )
   res.json(rows)
 })

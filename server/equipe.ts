@@ -31,7 +31,9 @@ function lerDesde(req: Request) {
 equipeRouter.get('/membros', async (_req, res) => {
   const [rows] = await pool.query(
     `select id, nome, email, papel, cargo, ativo, ultimo_acesso, created_at from usuarios
+     where padaria_id = ?
      order by ativo desc, field(papel, 'dono', 'admin', 'funcionario'), nome`,
+    [res.locals.padariaId],
   )
   res.json(rows)
 })
@@ -55,11 +57,12 @@ equipeRouter.post('/membros', async (req, res) => {
   const id = randomUUID()
   const json = (v: object | null | undefined) => (v ? JSON.stringify(v) : null)
   await pool.query(
-    `insert into usuarios (id, nome, email, senha_hash, papel, cargo, foto, telefone, cpf,
-       data_nascimento, data_admissao, turno, endereco, contato_emergencia, observacoes)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    `insert into usuarios (id, padaria_id, nome, email, senha_hash, papel, cargo, foto, telefone,
+       cpf, data_nascimento, data_admissao, turno, endereco, contato_emergencia, observacoes)
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
+      res.locals.padariaId,
       m.nome,
       m.email.trim().toLowerCase(),
       await hashSenha(m.senha),
@@ -95,9 +98,10 @@ equipeRouter.patch('/membros/:id', async (req, res) => {
     req.body,
   )
   await garantirCpfUnico(m.cpf, req.params.id)
-  const [rows] = await pool.query<RowDataPacket[]>('select papel from usuarios where id = ?', [
-    req.params.id,
-  ])
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'select papel from usuarios where id = ? and padaria_id = ?',
+    [req.params.id, res.locals.padariaId],
+  )
   if (!rows[0]) throw new HttpError(404, 'Membro não encontrado')
   // Proteção para o dono não se trancar fora do sistema.
   if (rows[0].papel === 'dono' && (m.papel !== undefined || m.ativo !== undefined)) {
@@ -150,8 +154,9 @@ equipeRouter.get('/resumo', async (req, res) => {
           union all select u.ultimo_acesso
        ) datas) as ultima_atividade
      from usuarios u
+     where u.padaria_id = ?
      order by u.ativo desc, total_vendas desc, u.nome`,
-    [hoje, desde, desde, desde, desde],
+    [hoje, desde, desde, desde, desde, res.locals.padariaId],
   )
   res.json(
     (rows as RowDataPacket[]).map((r) => ({
@@ -171,27 +176,28 @@ equipeRouter.get('/resumo', async (req, res) => {
 equipeRouter.get('/atividade', async (req, res) => {
   const limite = Math.min(Math.max(Number(req.query.limite) || 50, 1), 200)
   const usuarioId = typeof req.query.usuario_id === 'string' ? req.query.usuario_id : null
+  const p = res.locals.padariaId
   const [rows] = await pool.query(
     `select a.*, u.nome as usuario_nome from (
        select 'venda' as tipo, v.id, v.created_at as quando, v.created_by as usuario_id,
               v.forma_pagamento as detalhe, null as produto, null as quantidade, null as unidade, v.total as valor
-       from vendas v where v.status <> 'devolvida'
+       from vendas v where v.padaria_id = ? and v.status <> 'devolvida'
        union all
        select 'estoque', m.id, m.created_at, m.created_by,
               m.tipo, p.nome, m.quantidade, p.unidade, null
        from movimentacoes_estoque m join produtos p on p.id = m.produto_id
-       where coalesce(m.motivo, '') not in ('venda', 'producao', 'devolucao')
+       where m.padaria_id = ? and coalesce(m.motivo, '') not in ('venda', 'producao', 'devolucao')
        union all
        select 'producao', pr.id, pr.concluida_em, pr.concluida_por,
               null, r.nome, r.rendimento, null, null
        from producoes pr join receitas r on r.id = pr.receita_id
-       where pr.status = 'concluido'
+       where pr.padaria_id = ? and pr.status = 'concluido'
      ) a
      left join usuarios u on u.id = a.usuario_id
      where (? is null or a.usuario_id = ?)
      order by a.quando desc
      limit ?`,
-    [usuarioId, usuarioId, limite],
+    [p, p, p, usuarioId, usuarioId, limite],
   )
   res.json(rows)
 })
@@ -202,6 +208,6 @@ equipeRouter.put('/meta', async (req, res) => {
     z.object({ meta: z.number().min(0, 'Meta inválida').max(1_000_000, 'Meta muito alta') }),
     req.body,
   )
-  await salvarConfig('meta_diaria_vendas', String(meta))
+  await salvarConfig(res.locals.padariaId, 'meta_diaria_vendas', String(meta))
   res.json({ meta })
 })

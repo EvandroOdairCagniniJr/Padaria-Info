@@ -46,7 +46,7 @@ const etapas = [
 ]
 
 // Primeiro acesso: cria a conta do dono e já cadastra a padaria (nome, CNPJ, endereço...).
-export function PrimeiroAcesso() {
+export function PrimeiroAcesso({ onVoltar }: { onVoltar?: () => void }) {
   const { primeiroAcesso } = useAuth()
   const navigate = useNavigate()
   const [etapa, setEtapa] = useState(0)
@@ -110,12 +110,22 @@ export function PrimeiroAcesso() {
     <div className="min-h-svh bg-linear-to-br from-amber-50 via-orange-50 to-amber-100 px-4 py-8">
       <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-xl shadow-amber-900/10">
         <div className="border-b px-6 pt-6 pb-5 sm:px-8">
+          {onVoltar && (
+            <button
+              type="button"
+              onClick={onVoltar}
+              className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground"
+            >
+              <ArrowLeft className="size-4" />
+              Voltar para o login
+            </button>
+          )}
           <div className="flex items-center gap-3">
             <LogoPao className="size-11" />
             <div>
               <h1 className="text-2xl font-semibold tracking-tight">Bem-vindo ao Padaria Info</h1>
               <p className="text-sm text-muted-foreground">
-                Vamos configurar sua padaria. Leva menos de 2 minutos.
+                Cadastre sua padaria e crie a conta do dono. Leva menos de 2 minutos.
               </p>
             </div>
           </div>

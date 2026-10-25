@@ -1,6 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod'
-import { useQuery } from '@tanstack/react-query'
-import { CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react'
+import { CheckCircle2, ChevronRight, Eye, EyeOff, Loader2, Store, Users } from 'lucide-react'
 import { useState, type ComponentProps } from 'react'
 import { useForm } from 'react-hook-form'
 import { Navigate, useNavigate } from 'react-router-dom'
@@ -26,6 +25,11 @@ const cadastroSchema = z
     email: z.email('Informe um e-mail válido'),
     senha: z.string().min(6, 'A senha precisa ter pelo menos 6 caracteres'),
     confirmacao: z.string(),
+    codigo: z
+      .string()
+      .trim()
+      .toUpperCase()
+      .regex(/^[A-Z0-9]{8}$/, 'O código tem 8 letras e números'),
   })
   .refine((d) => d.senha === d.confirmacao, {
     path: ['confirmacao'],
@@ -34,7 +38,7 @@ const cadastroSchema = z
 
 type LoginForm = z.infer<typeof loginSchema>
 type CadastroForm = z.infer<typeof cadastroSchema>
-type Modo = 'entrar' | 'criar' | 'esqueci'
+type Modo = 'entrar' | 'criar' | 'equipe' | 'padaria' | 'esqueci'
 
 function CampoSenha({
   id,
@@ -134,9 +138,9 @@ function FormCriarConta({ onCriada }: { onCriada: () => void }) {
     formState: { errors, isSubmitting },
   } = useForm<CadastroForm>({ resolver: zodResolver(cadastroSchema) })
 
-  async function onSubmit({ nome, email, senha }: CadastroForm) {
+  async function onSubmit({ nome, email, senha, codigo }: CadastroForm) {
     try {
-      await api.post('/auth/cadastro', { nome, email, senha })
+      await api.post('/auth/cadastro', { nome, email, senha, codigo })
       setCriada(true)
     } catch (err) {
       setError('root', { message: err instanceof Error ? err.message : 'Não foi possível criar a conta' })
@@ -163,6 +167,21 @@ function FormCriarConta({ onCriada }: { onCriada: () => void }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="codigo">Código da padaria</Label>
+        <Input
+          id="codigo"
+          autoComplete="off"
+          placeholder="Ex.: K7M2QX9A"
+          maxLength={8}
+          className="font-mono tracking-widest uppercase"
+          {...register('codigo')}
+        />
+        <p className="text-xs text-muted-foreground">
+          Peça ao responsável: ele encontra o código em Equipe.
+        </p>
+        <Erro>{errors.codigo?.message}</Erro>
+      </div>
       <div className="space-y-2">
         <Label htmlFor="nome">Seu nome</Label>
         <Input id="nome" autoComplete="name" {...register('nome')} />
@@ -206,39 +225,55 @@ function FormCriarConta({ onCriada }: { onCriada: () => void }) {
   )
 }
 
+function OpcaoConta({
+  icone: Icone,
+  titulo,
+  texto,
+  onClick,
+}: {
+  icone: typeof Store
+  titulo: string
+  texto: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="flex w-full items-center gap-3 rounded-xl border bg-card p-4 text-left transition-colors hover:border-primary/60 hover:bg-accent/40"
+    >
+      <span className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">
+        <Icone className="size-5" />
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block font-medium">{titulo}</span>
+        <span className="block text-sm text-muted-foreground">{texto}</span>
+      </span>
+      <ChevronRight className="size-4 shrink-0 text-muted-foreground" />
+    </button>
+  )
+}
+
 export function LoginPage() {
   const { user } = useAuth()
   const [modo, setModo] = useState<Modo>('entrar')
   const [emailEsqueci, setEmailEsqueci] = useState('')
 
-  const setup = useQuery({
-    queryKey: ['auth', 'setup'],
-    queryFn: () => api.get<{ precisaSetup: boolean; padaria: string | null }>('/auth/setup'),
-    retry: false,
-    refetchInterval: false,
-  })
-
   if (user) return <Navigate to="/" replace />
-  if (setup.data?.precisaSetup) return <PrimeiroAcesso />
+  if (modo === 'padaria') return <PrimeiroAcesso onVoltar={() => setModo('criar')} />
 
   return (
     <div className="flex min-h-svh items-center justify-center bg-linear-to-br from-amber-50 via-orange-50 to-amber-100 px-4 py-8">
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card/95 p-8 shadow-xl shadow-amber-900/10">
         <div className="space-y-2 text-center">
           <LogoPao className="mx-auto size-16 rounded-2xl shadow-md" />
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">
-            {setup.data?.padaria || 'Padaria Info'}
-          </h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Padaria Info</h1>
           <p className="text-sm text-muted-foreground">
-            {modo === 'criar' ? 'Crie sua conta para fazer parte da equipe' : 'Que bom ter você aqui'}
+            {modo === 'entrar' || modo === 'esqueci'
+              ? 'Gestão completa para a sua padaria'
+              : 'Crie sua conta em poucos passos'}
           </p>
         </div>
-
-        {setup.isError && (
-          <p className="rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive">
-            {setup.error.message}
-          </p>
-        )}
 
         {modo === 'esqueci' ? (
           <EsqueciSenha emailInicial={emailEsqueci} onVoltar={() => setModo('entrar')} />
@@ -255,11 +290,11 @@ export function LoginPage() {
                   key={valor}
                   type="button"
                   role="tab"
-                  aria-selected={modo === valor}
+                  aria-selected={modo === valor || (valor === 'criar' && modo === 'equipe')}
                   onClick={() => setModo(valor)}
                   className={cn(
                     'rounded-md py-1.5 text-sm font-medium transition-colors',
-                    modo === valor
+                    modo === valor || (valor === 'criar' && modo === 'equipe')
                       ? 'bg-card text-foreground shadow-sm'
                       : 'text-muted-foreground hover:text-foreground',
                   )}
@@ -276,8 +311,32 @@ export function LoginPage() {
                   setModo('esqueci')
                 }}
               />
+            ) : modo === 'equipe' ? (
+              <div className="space-y-4">
+                <button
+                  type="button"
+                  onClick={() => setModo('criar')}
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
+                  ← Outras opções
+                </button>
+                <FormCriarConta onCriada={() => setModo('entrar')} />
+              </div>
             ) : (
-              <FormCriarConta onCriada={() => setModo('entrar')} />
+              <div className="space-y-3">
+                <OpcaoConta
+                  icone={Store}
+                  titulo="Cadastrar minha padaria"
+                  texto="Sou dono(a): quero usar o sistema na minha padaria."
+                  onClick={() => setModo('padaria')}
+                />
+                <OpcaoConta
+                  icone={Users}
+                  titulo="Entrar na equipe de uma padaria"
+                  texto="Trabalho numa padaria que já usa o Padaria Info."
+                  onClick={() => setModo('equipe')}
+                />
+              </div>
             )}
           </>
         )}

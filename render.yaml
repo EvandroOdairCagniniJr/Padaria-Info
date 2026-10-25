@@ -1,0 +1,42 @@
+# Deploy no Render (render.com): New → Blueprint → escolha este repositório.
+# O MySQL fica num serviço externo (ex.: Aiven); preencha as variáveis marcadas com sync: false.
+services:
+  - type: web
+    name: padaria-info
+    runtime: node
+    plan: free
+    # Com NODE_ENV=production o npm pula as devDependencies, que o build (vite/tsc) precisa.
+    buildCommand: npm ci --include=dev && npm run build
+    startCommand: node server/index.ts
+    healthCheckPath: /api/saude
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: NODE_VERSION
+        value: 24
+      - key: JWT_SECRET
+        generateValue: true
+      - key: MYSQL_HOST
+        sync: false
+      - key: MYSQL_PORT
+        sync: false
+      - key: MYSQL_USER
+        sync: false
+      - key: MYSQL_PASSWORD
+        sync: false
+      - key: MYSQL_DATABASE
+        sync: false
+      - key: MYSQL_SSL
+        value: "true"
+      - key: MYSQL_SSL_CA
+        sync: false
+      - key: SMTP_HOST
+        sync: false
+      - key: SMTP_PORT
+        sync: false
+      - key: SMTP_USER
+        sync: false
+      - key: SMTP_PASS
+        sync: false
+      - key: SMTP_FROM
+        sync: false

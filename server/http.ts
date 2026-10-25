@@ -38,3 +38,25 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   console.error(err)
   res.status(500).json({ message: 'Erro interno no servidor.' })
 }
+
+// Limite simples em memória: 10 tentativas por minuto por IP e rota (login, cadastro, código).
+// Freia quem tenta adivinhar senhas ou códigos; com um único servidor, memória basta.
+const JANELA_MS = 60_000
+const MAX_TENTATIVAS = 10
+const tentativas = new Map<string, { inicio: number; total: number }>()
+
+export function limitarTentativas(req: Request, res: Response, next: NextFunction) {
+  const agora = Date.now()
+  const chave = `${req.ip}|${req.baseUrl}${req.path}`
+  const atual = tentativas.get(chave)
+  if (!atual || agora - atual.inicio > JANELA_MS) {
+    tentativas.set(chave, { inicio: agora, total: 1 })
+  } else if (++atual.total > MAX_TENTATIVAS) {
+    res.status(429).json({ message: 'Muitas tentativas seguidas. Aguarde um minuto e tente de novo.' })
+    return
+  }
+  if (tentativas.size > 10_000) {
+    for (const [k, v] of tentativas) if (agora - v.inicio > JANELA_MS) tentativas.delete(k)
+  }
+  next()
+}

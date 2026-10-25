@@ -1,3 +1,4 @@
+import { randomBytes, randomUUID } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import mysql, { type PoolConnection, type RowDataPacket } from 'mysql2/promise'
 
@@ -9,6 +10,15 @@ const connectionOptions = {
   port: Number(process.env.MYSQL_PORT ?? 3306),
   user: process.env.MYSQL_USER ?? 'root',
   password: process.env.MYSQL_PASSWORD ?? '',
+  // MySQL na nuvem (Aiven, TiDB...) exige conexão criptografada. MYSQL_SSL_CA = certificado PEM.
+  ssl:
+    process.env.MYSQL_SSL === 'true'
+      ? {
+          // No painel do Render o PEM costuma ir numa linha só, com \n literais.
+          ca: process.env.MYSQL_SSL_CA?.replace(/\\n/g, '\n') || undefined,
+          rejectUnauthorized: Boolean(process.env.MYSQL_SSL_CA),
+        }
+      : undefined,
 }
 
 export const pool = mysql.createPool({
@@ -52,19 +62,39 @@ const colunasNovas: [string, string, string][] = [
   ['producoes', 'concluida_por', 'concluida_por char(36), add foreign key (concluida_por) references usuarios (id)'],
 ]
 
+// Multi-padaria: toda tabela de negócio pertence a uma padaria. Linhas antigas (de antes do
+// multi-padaria) são ligadas à primeira padaria em migrarParaMultiPadaria.
+export const tabelasDaPadaria = [
+  'usuarios',
+  'produtos',
+  'movimentacoes_estoque',
+  'vendas',
+  'contas_financeiras',
+  'receitas',
+  'producoes',
+  'historico_perfil',
+] as const
+for (const tabela of tabelasDaPadaria) {
+  colunasNovas.push([tabela, 'padaria_id', 'padaria_id char(36) null'])
+}
+
 // Índices para as consultas "por pessoa" (Equipe, Minhas vendas, conquistas): [tabela, nome, colunas].
 const indicesNovos: [string, string, string][] = [
   ['vendas', 'vendas_created_by_idx', 'created_by, created_at'],
   ['movimentacoes_estoque', 'movimentacoes_created_by_idx', 'created_by, created_at'],
+  ...tabelasDaPadaria.map((t): [string, string, string] => [t, `${t}_padaria_idx`, 'padaria_id']),
 ]
 
 // Cria o banco (se preciso) e aplica server/schema.sql.
 export async function initDatabase() {
   const admin = await mysql.createConnection({ ...connectionOptions, multipleStatements: true })
   try {
-    await admin.query(
-      `create database if not exists \`${database}\` character set utf8mb4 collate utf8mb4_0900_ai_ci`,
-    )
+    // Em MySQL gerenciado o banco já existe (e às vezes não há permissão para criar).
+    await admin
+      .query(
+        `create database if not exists \`${database}\` character set utf8mb4 collate utf8mb4_0900_ai_ci`,
+      )
+      .catch(() => undefined)
     await admin.query(`use \`${database}\``)
     await admin.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
 
@@ -83,9 +113,59 @@ export async function initDatabase() {
       )
       if (rows.length === 0) await admin.query(`create index ${indice} on ${tabela} (${colunas})`)
     }
+    await migrarParaMultiPadaria(admin)
   } finally {
     await admin.end()
   }
+}
+
+export function novoCodigoConvite() {
+  // Sem 0/O e 1/I para não confundir quem digita.
+  const letras = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'
+  return Array.from(randomBytes(8), (b) => letras[b % letras.length]).join('')
+}
+
+// Instalação de antes do multi-padaria: cria a padaria com o cadastro antigo e liga todas as
+// linhas sem padaria_id a ela; configurações e fotos de categoria vão para as tabelas novas.
+async function migrarParaMultiPadaria(conn: mysql.Connection) {
+  const [orfaos] = await conn.query<RowDataPacket[]>(
+    'select 1 from usuarios where padaria_id is null limit 1',
+  )
+  if (!orfaos.length) return
+  const [antigas] = await conn.query<RowDataPacket[]>(
+    "select table_name as t from information_schema.tables where table_schema = database() and table_name in ('configuracoes', 'categorias')",
+  )
+  const existe = (t: string) => antigas.some((r) => r.t === t)
+  let dados = JSON.stringify({ nome_fantasia: 'Minha padaria' })
+  if (existe('configuracoes')) {
+    const [cfg] = await conn.query<RowDataPacket[]>(
+      "select valor from configuracoes where chave = 'padaria'",
+    )
+    if (cfg[0]?.valor) dados = cfg[0].valor
+  }
+  const id = randomUUID()
+  await conn.query('insert into padarias (id, dados, codigo_convite) values (?, ?, ?)', [
+    id,
+    dados,
+    novoCodigoConvite(),
+  ])
+  for (const tabela of tabelasDaPadaria) {
+    await conn.query(`update ${tabela} set padaria_id = ? where padaria_id is null`, [id])
+  }
+  if (existe('configuracoes')) {
+    await conn.query(
+      `insert ignore into padaria_config (padaria_id, chave, valor)
+       select ?, chave, valor from configuracoes where chave <> 'padaria'`,
+      [id],
+    )
+  }
+  if (existe('categorias')) {
+    await conn.query(
+      'insert ignore into categorias_fotos (padaria_id, nome, foto) select ?, nome, foto from categorias',
+      [id],
+    )
+  }
+  console.log('Banco migrado para o modo multi-padaria.')
 }
 
 export async function transaction<T>(fn: (conn: PoolConnection) => Promise<T>): Promise<T> {
@@ -103,14 +183,18 @@ export async function transaction<T>(fn: (conn: PoolConnection) => Promise<T>): 
   }
 }
 
-export async function lerConfig(chave: string, padrao: string) {
-  const [rows] = await pool.query<RowDataPacket[]>('select valor from configuracoes where chave = ?', [chave])
+export async function lerConfig(padariaId: string, chave: string, padrao: string) {
+  const [rows] = await pool.query<RowDataPacket[]>(
+    'select valor from padaria_config where padaria_id = ? and chave = ?',
+    [padariaId, chave],
+  )
   return (rows[0]?.valor as string | undefined) ?? padrao
 }
 
-export async function salvarConfig(chave: string, valor: string) {
+export async function salvarConfig(padariaId: string, chave: string, valor: string) {
   await pool.query(
-    'insert into configuracoes (chave, valor) values (?, ?) on duplicate key update valor = values(valor)',
-    [chave, valor],
+    `insert into padaria_config (padaria_id, chave, valor) values (?, ?, ?)
+     on duplicate key update valor = values(valor)`,
+    [padariaId, chave, valor],
   )
 }

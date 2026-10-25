@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/features/auth/AuthContext'
 import { PerfilDialog } from '@/features/auth/PerfilDialog'
 import { useAlterarMembro, useAtividadeEquipe, useResumoEquipe } from '@/features/equipe/api'
+import { ConviteEquipe } from '@/features/equipe/ConviteEquipe'
 import { MembroFormDialog } from '@/features/equipe/MembroFormDialog'
 import { MuralEquipe } from '@/features/equipe/MuralEquipe'
 import { NovidadesEquipe } from '@/features/equipe/Novidades'
@@ -232,6 +233,8 @@ function PainelDono({
   return (
     <section className="space-y-4">
       <h2 className="font-heading text-lg font-semibold">Painel do dono</h2>
+
+      <ConviteEquipe />
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (

@@ -10,14 +10,13 @@ import {
 import jwt from 'jsonwebtoken'
 import type { RowDataPacket } from 'mysql2'
 import { z } from 'zod'
-import { pool } from './db.ts'
-import { HttpError, validar } from './http.ts'
+import { novoCodigoConvite, pool } from './db.ts'
+import { HttpError, limitarTentativas, validar } from './http.ts'
 import {
   dadosPessoaisSchema,
   garantirCpfUnico,
   lerPadaria,
   padariaSchema,
-  salvarPadaria,
 } from './cadastro.ts'
 import { alterarPerfil } from './perfil.ts'
 import { enviarCodigoSenha } from './email.ts'
@@ -25,6 +24,10 @@ import { enviarCodigoSenha } from './email.ts'
 const COOKIE = 'padaria_token'
 const SETE_DIAS_MS = 7 * 24 * 60 * 60 * 1000
 
+const producao = process.env.NODE_ENV === 'production'
+if (producao && !process.env.JWT_SECRET) {
+  throw new Error('Defina JWT_SECRET nas variáveis de ambiente antes de subir em produção.')
+}
 const jwtSecret =
   process.env.JWT_SECRET ??
   (console.warn('JWT_SECRET não definido no .env — os logins expiram ao reiniciar o servidor.'),
@@ -34,6 +37,8 @@ export type Papel = 'dono' | 'admin' | 'funcionario'
 
 export interface Usuario {
   id: string
+  // Padaria da pessoa: toda consulta de negócio filtra por ela (res.locals.padariaId).
+  padaria_id: string
   nome: string
   email: string
   papel: Papel
@@ -52,7 +57,7 @@ export const fotoSchema = z
 
 export const CARGO_DONO = 'Dono(a) da padaria'
 
-const colunasUsuario = 'id, nome, email, papel, cargo, foto'
+const colunasUsuario = 'id, padaria_id, nome, email, papel, cargo, foto'
 
 export function hashSenha(senha: string) {
   return bcrypt.hash(senha, 10)
@@ -60,7 +65,13 @@ export function hashSenha(senha: string) {
 
 function iniciarSessao(res: Response, usuario: Usuario) {
   const token = jwt.sign({ sub: usuario.id }, jwtSecret, { expiresIn: '7d' })
-  res.cookie(COOKIE, token, { httpOnly: true, sameSite: 'lax', maxAge: SETE_DIAS_MS })
+  // Em produção (HTTPS) o cookie só trafega criptografado.
+  res.cookie(COOKIE, token, {
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: producao,
+    maxAge: SETE_DIAS_MS,
+  })
   res.json(usuario)
 }
 
@@ -72,12 +83,15 @@ async function buscarUsuarioAtivo(id: string): Promise<Usuario | null> {
   return (rows[0] as Usuario | undefined) ?? null
 }
 
-async function contarUsuarios() {
-  const [rows] = await pool.query<RowDataPacket[]>('select count(*) as total from usuarios')
-  return Number(rows[0].total)
+async function emailEmUso(email: string) {
+  const [rows] = await pool.query<RowDataPacket[]>('select 1 from usuarios where email = ?', [email])
+  return rows.length > 0
 }
 
 export const authRouter = Router()
+
+// Rotas públicas que recebem senha ou disparam e-mail: poucas tentativas por minuto por IP.
+authRouter.use(['/login', '/cadastro', '/setup', '/esqueci-senha', '/codigo'], limitarTentativas)
 
 authRouter.post('/login', async (req, res) => {
   const { email, senha } = validar(z.object({ email: z.string(), senha: z.string() }), req.body)
@@ -109,6 +123,7 @@ async function entrar(res: Response, u: RowDataPacket) {
   await pool.query('update usuarios set ultimo_acesso = now() where id = ?', [u.id])
   iniciarSessao(res, {
     id: u.id,
+    padaria_id: u.padaria_id,
     nome: u.nome,
     email: u.email,
     papel: u.papel,
@@ -117,29 +132,40 @@ async function entrar(res: Response, u: RowDataPacket) {
   })
 }
 
-// Criar conta (tela de login): só depois do primeiro acesso. Entra como funcionário desativado;
-// o dono vê "Aguardando liberação" em Equipe e decide o papel e o cargo.
+const emailUsado = new HttpError(
+  409,
+  'Já existe uma conta com este e-mail. Use "Entrar" ou "Esqueci minha senha".',
+)
+
+// Criar conta como funcionário (tela de login): a pessoa informa o código de convite que o dono
+// vê em Equipe. Entra desativada; o dono vê "Aguardando liberação" e decide papel e cargo.
 authRouter.post('/cadastro', async (req, res) => {
   const dados = validar(
     z.object({
       nome: z.string().trim().min(1, 'Informe seu nome').max(255),
       email: z.email('Informe um e-mail válido'),
       senha: senhaSchema,
+      codigo: z
+        .string()
+        .trim()
+        .toUpperCase()
+        .regex(/^[A-Z0-9]{8}$/, 'O código da padaria tem 8 letras e números'),
     }),
     req.body,
   )
-  if ((await contarUsuarios()) === 0) {
-    throw new HttpError(409, 'A padaria ainda não foi configurada. Faça o primeiro acesso.')
+  const [padarias] = await pool.query<RowDataPacket[]>(
+    'select id from padarias where codigo_convite = ?',
+    [dados.codigo],
+  )
+  if (!padarias[0]) {
+    throw new HttpError(404, 'Código da padaria não encontrado. Confira com o responsável.')
   }
   const email = dados.email.trim().toLowerCase()
-  const [existe] = await pool.query<RowDataPacket[]>('select 1 from usuarios where email = ?', [email])
-  if (existe.length) {
-    throw new HttpError(409, 'Já existe uma conta com este e-mail. Use "Entrar" ou "Esqueci minha senha".')
-  }
+  if (await emailEmUso(email)) throw emailUsado
   await pool.query(
-    `insert into usuarios (id, nome, email, senha_hash, papel, cargo, ativo)
-     values (?, ?, ?, ?, 'funcionario', '', false)`,
-    [randomUUID(), dados.nome, email, await hashSenha(dados.senha)],
+    `insert into usuarios (id, padaria_id, nome, email, senha_hash, papel, cargo, ativo)
+     values (?, ?, ?, ?, ?, 'funcionario', '', false)`,
+    [randomUUID(), padarias[0].id, dados.nome, email, await hashSenha(dados.senha)],
   )
   res.status(201).json({ ok: true })
 })
@@ -183,7 +209,7 @@ authRouter.post('/esqueci-senha', async (req, res) => {
            tentativas = 0, created_at = now()`,
         [u.id, hashCodigo(u.id, codigo)],
       )
-      const padaria = (await lerPadaria())?.nome_fantasia || 'Padaria Info'
+      const padaria = (await lerPadaria(u.padaria_id))?.nome_fantasia || 'Padaria Info'
       try {
         await enviarCodigoSenha(u.email, u.nome, codigo, padaria)
       } catch (err) {
@@ -248,16 +274,7 @@ authRouter.get('/me', exigirLogin, (_req, res) => {
   res.json(res.locals.usuario)
 })
 
-// Primeiro acesso: só funciona enquanto não existe nenhum usuário, e cria o dono.
-// Também devolve o nome da padaria para a tela de login.
-authRouter.get('/setup', async (_req, res) => {
-  const padaria = await lerPadaria()
-  res.json({
-    precisaSetup: (await contarUsuarios()) === 0,
-    padaria: padaria?.nome_fantasia ?? null,
-  })
-})
-
+// Cadastrar minha padaria: cria a padaria e a conta do dono (qualquer pessoa, a qualquer hora).
 authRouter.post('/setup', async (req, res) => {
   const dados = validar(
     z
@@ -270,21 +287,31 @@ authRouter.post('/setup', async (req, res) => {
       .extend(dadosPessoaisSchema.shape),
     req.body,
   )
-  if ((await contarUsuarios()) > 0) throw new HttpError(403, 'O primeiro acesso já foi configurado')
+  const email = dados.email.trim().toLowerCase()
+  if (await emailEmUso(email)) throw emailUsado
+  await garantirCpfUnico(dados.cpf)
+  const padariaId = randomUUID()
   const usuario: Usuario = {
     id: randomUUID(),
+    padaria_id: padariaId,
     nome: dados.nome,
-    email: dados.email.trim().toLowerCase(),
+    email,
     papel: 'dono',
     cargo: CARGO_DONO,
     foto: null,
   }
+  await pool.query('insert into padarias (id, dados, codigo_convite) values (?, ?, ?)', [
+    padariaId,
+    JSON.stringify(dados.padaria),
+    novoCodigoConvite(),
+  ])
   await pool.query(
-    `insert into usuarios (id, nome, email, senha_hash, papel, cargo, telefone, cpf, data_nascimento,
-       endereco, ultimo_acesso)
-     values (?, ?, ?, ?, 'dono', ?, ?, ?, ?, ?, now())`,
+    `insert into usuarios (id, padaria_id, nome, email, senha_hash, papel, cargo, telefone, cpf,
+       data_nascimento, endereco, ultimo_acesso)
+     values (?, ?, ?, ?, ?, 'dono', ?, ?, ?, ?, ?, now())`,
     [
       usuario.id,
+      padariaId,
       usuario.nome,
       usuario.email,
       await hashSenha(dados.senha),
@@ -295,7 +322,6 @@ authRouter.post('/setup', async (req, res) => {
       dados.endereco ? JSON.stringify(dados.endereco) : null,
     ],
   )
-  await salvarPadaria(dados.padaria)
   iniciarSessao(res, usuario)
 })
 
@@ -346,6 +372,7 @@ export async function exigirLogin(req: Request, res: Response, next: NextFunctio
     return
   }
   res.locals.usuario = usuario
+  res.locals.padariaId = usuario.padaria_id
   next()
 }
 
