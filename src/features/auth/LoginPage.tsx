@@ -75,6 +75,7 @@ function Erro({ children }: { children?: string }) {
 function FormEntrar({ onEsqueci }: { onEsqueci: (email: string) => void }) {
   const { signIn } = useAuth()
   const navigate = useNavigate()
+  const [perfil, setPerfil] = useState<'dono' | 'equipe'>('dono')
   const {
     register,
     handleSubmit,
@@ -84,7 +85,7 @@ function FormEntrar({ onEsqueci }: { onEsqueci: (email: string) => void }) {
   } = useForm<LoginForm>({ resolver: zodResolver(loginSchema) })
 
   async function onSubmit(values: LoginForm) {
-    const { error } = await signIn(values.email, values.password)
+    const { error } = await signIn(values.email, values.password, perfil)
     if (error) {
       setError('root', { message: error })
       return
@@ -94,6 +95,32 @@ function FormEntrar({ onEsqueci }: { onEsqueci: (email: string) => void }) {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+      <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Como você entra">
+        {(
+          [
+            ['dono', Store, 'Sou dono(a)'],
+            ['equipe', Users, 'Sou da equipe'],
+          ] as const
+        ).map(([valor, Icone, rotulo]) => (
+          <button
+            key={valor}
+            type="button"
+            role="radio"
+            aria-checked={perfil === valor}
+            onClick={() => setPerfil(valor)}
+            className={cn(
+              'flex items-center justify-center gap-2 rounded-lg border px-3 py-2.5 text-sm font-medium transition-colors',
+              perfil === valor
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'text-muted-foreground hover:border-primary/40 hover:text-foreground',
+            )}
+          >
+            <Icone className="size-4" />
+            {rotulo}
+          </button>
+        ))}
+      </div>
+
       <div className="space-y-2">
         <Label htmlFor="email">E-mail</Label>
         <Input id="email" type="email" autoComplete="email" {...register('email')} />

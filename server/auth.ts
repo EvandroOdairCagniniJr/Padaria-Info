@@ -94,7 +94,15 @@ export const authRouter = Router()
 authRouter.use(['/login', '/cadastro', '/setup', '/esqueci-senha', '/codigo'], limitarTentativas)
 
 authRouter.post('/login', async (req, res) => {
-  const { email, senha } = validar(z.object({ email: z.string(), senha: z.string() }), req.body)
+  const { email, senha, perfil } = validar(
+    z.object({
+      email: z.string(),
+      senha: z.string(),
+      // Escolha da tela de login: "Sou dono(a)" ou "Sou da equipe".
+      perfil: z.enum(['dono', 'equipe']).optional(),
+    }),
+    req.body,
+  )
   const [rows] = await pool.query<RowDataPacket[]>(
     `select ${colunasUsuario}, ativo, ultimo_acesso, senha_hash from usuarios where email = ?`,
     [email.trim().toLowerCase()],
@@ -102,6 +110,13 @@ authRouter.post('/login', async (req, res) => {
   const u = rows[0]
   if (!u || !(await bcrypt.compare(senha, u.senha_hash))) {
     throw new HttpError(401, 'E-mail ou senha inválidos')
+  }
+  // Só depois da senha certa: não revela o perfil de contas alheias.
+  if (perfil === 'dono' && u.papel !== 'dono') {
+    throw new HttpError(403, 'Esta conta é da equipe da padaria. Escolha "Sou da equipe" para entrar.')
+  }
+  if (perfil === 'equipe' && u.papel === 'dono') {
+    throw new HttpError(403, 'Esta conta é do dono da padaria. Escolha "Sou dono(a)" para entrar.')
   }
   garantirAtivo(u)
   await entrar(res, u)

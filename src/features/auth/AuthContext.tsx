@@ -27,7 +27,11 @@ export interface AlteracaoPerfil {
 interface AuthContextValue {
   user: Usuario | null
   loading: boolean
-  signIn: (email: string, senha: string) => Promise<{ error: string | null }>
+  signIn: (
+    email: string,
+    senha: string,
+    perfil?: 'dono' | 'equipe',
+  ) => Promise<{ error: string | null }>
   // Esqueci minha senha: entra com o código do e-mail (e troca a senha, se informada).
   entrarComCodigo: (
     email: string,
@@ -93,7 +97,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       value={{
         user,
         loading,
-        signIn: (email, senha) => autenticar('/auth/login', { email, senha }, setUser),
+        signIn: (email, senha, perfil) =>
+          autenticar('/auth/login', { email, senha, perfil }, setUser),
         entrarComCodigo: (email, codigo, novaSenha) =>
           autenticar('/auth/codigo/entrar', { email, codigo, novaSenha }, setUser),
         primeiroAcesso: (dados) => autenticar('/auth/setup', dados, setUser),
