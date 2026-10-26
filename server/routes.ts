@@ -4,6 +4,7 @@ import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
 import { z } from 'zod'
 import { pool, transaction } from './db.ts'
 import { lerMetas, metaDaPessoa } from './metas.ts'
+import { caixaAberto } from './caixa.ts'
 import { exigirPapel, fotoSchema } from './auth.ts'
 import { HttpError, validar } from './http.ts'
 
@@ -376,15 +377,18 @@ apiRouter.post('/vendas', async (req, res) => {
 
   const resultado = await transaction(async (conn) => {
     const vendaId = randomUUID()
+    // A venda entra no caixa aberto de quem vendeu (se houver).
+    const caixa = await caixaAberto(conn, padariaId(res), userId)
     await conn.query(
-      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by)
-       values (?, ?, 0, ?, ?, ?)`,
+      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by, caixa_id)
+       values (?, ?, 0, ?, ?, ?, ?)`,
       [
         vendaId,
         padariaId(res),
         venda.forma_pagamento,
         venda.forma_pagamento === 'dinheiro' ? (venda.valor_recebido ?? null) : null,
         userId,
+        caixa?.id ?? null,
       ],
     )
 

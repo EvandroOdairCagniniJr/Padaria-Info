@@ -19,6 +19,7 @@ export const paginas = {
   metas: () => import('@/features/metas/MetasPage').then((m) => ({ default: m.MetasPage })),
   encomendas: () =>
     import('@/features/encomendas/EncomendasPage').then((m) => ({ default: m.EncomendasPage })),
+  caixa: () => import('@/features/caixa/CaixaPage').then((m) => ({ default: m.CaixaPage })),
   equipe: () => import('@/features/equipe/EquipePage').then((m) => ({ default: m.EquipePage })),
 }
 

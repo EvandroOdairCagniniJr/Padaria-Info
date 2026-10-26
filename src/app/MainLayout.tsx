@@ -1,4 +1,5 @@
 import {
+  Banknote,
   BookOpen,
   CalendarClock,
   ChefHat,
@@ -37,6 +38,7 @@ const gestao: Papel[] = ['dono', 'admin']
 const navItems = [
   { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, papeis: gestao },
   { to: '/pdv', label: 'PDV', icon: ShoppingCart, papeis: todos },
+  { to: '/caixa', label: 'Caixa', icon: Banknote, papeis: todos },
   { to: '/vendas', label: 'Vendas', icon: Receipt, papeis: todos },
   { to: '/encomendas', label: 'Encomendas', icon: CalendarClock, papeis: todos },
   { to: '/produtos', label: 'Produtos', icon: Package, papeis: gestao },

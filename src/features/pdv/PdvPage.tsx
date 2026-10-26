@@ -2,6 +2,7 @@ import {
   Banknote,
   CreditCard,
   Loader2,
+  Lock,
   Minus,
   Plus,
   QrCode,
@@ -20,6 +21,7 @@ import { VendaConcluida } from '@/components/VendaConcluida'
 import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/AuthContext'
+import { useCaixaAtual } from '@/features/caixa/api'
 import { useFinalizarVenda } from '@/features/pdv/api'
 import { lojaDoComprovante, usePadaria } from '@/features/padaria/api'
 import { ComprovanteDialog } from '@/features/pdv/ComprovanteDialog'
@@ -65,6 +67,7 @@ function sugestoesDinheiro(total: number) {
 export function PdvPage() {
   const { data: produtos, isLoading } = useProdutos()
   const finalizarVenda = useFinalizarVenda()
+  const caixa = useCaixaAtual()
   const padaria = usePadaria()
   const { user } = useAuth()
   const buscaRef = useRef<HTMLInputElement>(null)
@@ -253,6 +256,15 @@ export function PdvPage() {
                     Vendendo como <span className="font-semibold">{user.nome || user.email}</span>
                   </span>
                 </span>
+              )}
+              {caixa.data && !caixa.data.caixa && (
+                <Link
+                  to="/caixa"
+                  className="flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-3 py-1 text-xs font-medium text-amber-900 hover:bg-amber-100"
+                >
+                  <Lock className="size-3.5" />
+                  Caixa fechado — abrir caixa
+                </Link>
               )}
             </div>
             <p className="hidden text-sm text-muted-foreground sm:block">

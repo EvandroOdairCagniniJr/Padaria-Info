@@ -7,6 +7,7 @@ import { z } from 'zod'
 import { pool, transaction } from './db.ts'
 import { HttpError, validar } from './http.ts'
 import { registrarMovimentacao } from './routes.ts'
+import { caixaAberto } from './caixa.ts'
 
 export const encomendasRouter = Router()
 
@@ -124,10 +125,12 @@ encomendasRouter.post('/', async (req, res) => {
     )
     const id = randomUUID()
     const numero = Number(ultimo.n) + 1
+    // O sinal entra no caixa aberto de quem recebeu.
+    const caixa = e.sinal > 0 ? await caixaAberto(conn, padariaId, res.locals.usuario.id) : null
     await conn.query(
       `insert into encomendas (id, padaria_id, numero, cliente_nome, cliente_telefone, retirada_em,
-         entrega, endereco, sinal, forma_sinal, observacoes, created_by)
-       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+         entrega, endereco, sinal, forma_sinal, observacoes, created_by, caixa_sinal_id)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         id,
         padariaId,
@@ -141,6 +144,7 @@ encomendasRouter.post('/', async (req, res) => {
         e.sinal > 0 ? e.forma_sinal : null,
         e.observacoes || null,
         res.locals.usuario.id,
+        caixa?.id ?? null,
       ],
     )
     const total = await gravarItens(conn, padariaId, id, e.itens)
@@ -168,12 +172,17 @@ encomendasRouter.put('/:id', async (req, res) => {
   const e = validar(encomendaSchema, req.body)
   const padariaId: string = res.locals.padariaId
   await transaction(async (conn) => {
-    await encomendaAberta(conn, padariaId, req.params.id)
+    const atual = await encomendaAberta(conn, padariaId, req.params.id)
+    // Sinal lançado só agora: entra no caixa aberto de quem está editando.
+    const caixaSinal =
+      atual.caixa_sinal_id ??
+      (e.sinal > 0 ? ((await caixaAberto(conn, padariaId, res.locals.usuario.id))?.id ?? null) : null)
     const total = await gravarItens(conn, padariaId, req.params.id, e.itens)
     validarSinal(e.sinal, total, e.forma_sinal)
     await conn.query(
       `update encomendas set cliente_nome = ?, cliente_telefone = ?, retirada_em = ?, entrega = ?,
-         endereco = ?, sinal = ?, forma_sinal = ?, observacoes = ?, total = ? where id = ?`,
+         endereco = ?, sinal = ?, forma_sinal = ?, observacoes = ?, total = ?, caixa_sinal_id = ?
+       where id = ?`,
       [
         e.cliente_nome,
         e.cliente_telefone,
@@ -184,6 +193,7 @@ encomendasRouter.put('/:id', async (req, res) => {
         e.sinal > 0 ? e.forma_sinal : null,
         e.observacoes || null,
         total,
+        caixaSinal,
         req.params.id,
       ],
     )
@@ -226,11 +236,12 @@ encomendasRouter.post('/:id/entregar', async (req, res) => {
       throw new HttpError(400, 'Valor recebido menor que o restante a pagar')
     }
     const vendaId = randomUUID()
+    const caixa = await caixaAberto(conn, padariaId, usuarioId)
     // Sem restante (tudo pago no sinal), a venda fica com a forma do sinal.
     const forma = restante > 0 ? forma_pagamento : (e.forma_sinal ?? forma_pagamento)
     await conn.query(
-      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by)
-       values (?, ?, ?, ?, ?, ?)`,
+      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by, caixa_id)
+       values (?, ?, ?, ?, ?, ?, ?)`,
       [
         vendaId,
         padariaId,
@@ -239,6 +250,7 @@ encomendasRouter.post('/:id/entregar', async (req, res) => {
         // O sinal já entrou antes: o troco é calculado só sobre o restante, na tela de entrega.
         null,
         usuarioId,
+        caixa?.id ?? null,
       ],
     )
     for (const i of itens) {

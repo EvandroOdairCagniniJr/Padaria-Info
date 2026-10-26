@@ -263,3 +263,33 @@ create table if not exists encomendas_itens (
   foreign key (encomenda_id) references encomendas (id) on delete cascade,
   foreign key (produto_id) references produtos (id)
 );
+
+-- Caixa (gaveta) de cada operador: abertura com fundo de troco, sangrias/suprimentos e
+-- fechamento com a contagem. As vendas guardam o caixa em que entraram (vendas.caixa_id).
+create table if not exists caixas (
+  id char(36) primary key,
+  padaria_id char(36) not null,
+  operador_id char(36) not null,
+  aberto_em timestamp not null default current_timestamp,
+  fundo_troco decimal(10, 2) not null default 0,
+  fechado_em timestamp null,
+  -- Fechamento: o que o sistema esperava e o que foi contado, por forma de pagamento (JSON).
+  esperado json null,
+  contado json null,
+  diferenca decimal(10, 2) null,
+  observacoes varchar(500),
+  index caixas_padaria_idx (padaria_id, aberto_em),
+  index caixas_operador_idx (operador_id, fechado_em)
+);
+
+create table if not exists caixa_movimentos (
+  id char(36) primary key,
+  padaria_id char(36) not null,
+  caixa_id char(36) not null,
+  tipo enum('sangria', 'suprimento') not null,
+  valor decimal(10, 2) not null check (valor > 0),
+  motivo varchar(255),
+  created_by char(36),
+  created_at timestamp not null default current_timestamp,
+  foreign key (caixa_id) references caixas (id) on delete cascade
+);

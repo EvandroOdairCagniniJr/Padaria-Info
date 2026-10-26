@@ -59,6 +59,10 @@ const colunasNovas: [string, string, string][] = [
   ['vendas', 'devolvida_em', 'devolvida_em timestamp null'],
   ['vendas', 'devolvida_por', 'devolvida_por char(36) null'],
   ['vendas', 'motivo_devolucao', 'motivo_devolucao varchar(255) null'],
+  // Caixa em que a venda entrou (abertura/fechamento de caixa por operador).
+  ['vendas', 'caixa_id', 'caixa_id char(36) null'],
+  // Caixa em que o sinal da encomenda foi recebido.
+  ['encomendas', 'caixa_sinal_id', 'caixa_sinal_id char(36) null'],
   ['producoes', 'concluida_por', 'concluida_por char(36), add foreign key (concluida_por) references usuarios (id)'],
 ]
 

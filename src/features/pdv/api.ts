@@ -33,6 +33,7 @@ export function useFinalizarVenda() {
       queryClient.invalidateQueries({ queryKey: ['equipe'] })
       queryClient.invalidateQueries({ queryKey: ['conquistas'] })
       queryClient.invalidateQueries({ queryKey: ['metas'] })
+      queryClient.invalidateQueries({ queryKey: ['caixa'] })
     },
   })
 }
