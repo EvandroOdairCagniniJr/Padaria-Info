@@ -59,6 +59,11 @@ const colunasNovas: [string, string, string][] = [
   ['vendas', 'devolvida_em', 'devolvida_em timestamp null'],
   ['vendas', 'devolvida_por', 'devolvida_por char(36) null'],
   ['vendas', 'motivo_devolucao', 'motivo_devolucao varchar(255) null'],
+  // Promoções: desconto por item (e qual promoção) e descontos da venda.
+  ['vendas_itens', 'desconto', 'desconto decimal(10, 2) not null default 0'],
+  ['vendas_itens', 'promocao_id', 'promocao_id char(36) null'],
+  ['vendas', 'desconto_promocoes', 'desconto_promocoes decimal(10, 2) not null default 0'],
+  ['vendas', 'desconto_manual', 'desconto_manual decimal(10, 2) not null default 0'],
   // Caixa em que a venda entrou (abertura/fechamento de caixa por operador).
   ['vendas', 'caixa_id', 'caixa_id char(36) null'],
   // Caixa em que o sinal da encomenda foi recebido.

@@ -12,8 +12,18 @@ export function lojaDe(c: Comprovante) {
 export interface Comprovante {
   vendaId: string
   quando: string
-  itens: { nome: string; quantidade: number; unidade: string; precoUnitario: number }[]
+  itens: {
+    nome: string
+    quantidade: number
+    unidade: string
+    precoUnitario: number
+    // Desconto do item (promoção e/ou parte do desconto manual) e o nome da promoção.
+    desconto?: number
+    promocao?: string | null
+  }[]
   total: number
+  // Soma de todos os descontos da venda (promoções + desconto manual).
+  descontos?: number
   formaPagamento: string
   // Só em dinheiro, quando o atendente informou quanto recebeu.
   recebido?: number | null
@@ -85,9 +95,16 @@ export function linhasComprovante(c: Comprovante) {
         `  ${formatQuantidade(i.quantidade)} ${i.unidade} x ${brl(i.precoUnitario)}`,
         brl(i.quantidade * i.precoUnitario),
       ),
+      ...(i.desconto ? colunas(`  ${i.promocao ?? 'Desconto'}`, `-${brl(i.desconto)}`) : []),
     ]),
     TRACO,
     ...colunas(`${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'}`, ''),
+    ...(c.descontos
+      ? [
+          ...colunas('Subtotal', brl(c.total + c.descontos)),
+          ...colunas('Descontos', `-${brl(c.descontos)}`),
+        ]
+      : []),
     ...colunas('TOTAL', brl(c.total)),
     TRACO,
     ...colunas('Pagamento', c.formaPagamento),

@@ -192,8 +192,11 @@ export function VendasPage() {
         quantidade: i.quantidade,
         unidade: i.unidade,
         precoUnitario: i.preco_unitario,
+        desconto: i.desconto || undefined,
+        promocao: i.promocao,
       })),
       total: venda.total,
+      descontos: venda.desconto_promocoes + venda.desconto_manual || undefined,
       formaPagamento: nomeCompletoForma[venda.forma_pagamento],
       recebido: venda.valor_recebido,
       atendente: venda.vendedor_nome,
@@ -563,7 +566,14 @@ function DetalheVenda({
                       {formatQuantidade(i.quantidade)} {i.unidade} × {formatBRL(i.preco_unitario)}
                     </span>
                   </span>
-                  <span className="text-sm font-medium tabular-nums">{formatBRL(i.subtotal)}</span>
+                  <span className="text-right text-sm font-medium tabular-nums">
+                    {formatBRL(i.subtotal)}
+                    {i.desconto > 0 && (
+                      <span className="block text-[11px] font-normal text-emerald-700">
+                        {i.promocao ?? 'desconto'} −{formatBRL(i.desconto)}
+                      </span>
+                    )}
+                  </span>
                 </li>
               ))}
             </ul>

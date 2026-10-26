@@ -23,6 +23,8 @@ import { Input } from '@/components/ui/input'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useCaixaAtual } from '@/features/caixa/api'
 import { useFinalizarVenda } from '@/features/pdv/api'
+import { usePromocoesAtivas } from '@/features/promocoes/api'
+import { aplicarPromocoes, descreverPromocao, promocaoAlcanca, promocaoVigente } from '@/lib/promocoes'
 import { lojaDoComprovante, usePadaria } from '@/features/padaria/api'
 import { ComprovanteDialog } from '@/features/pdv/ComprovanteDialog'
 import type { Comprovante } from '@/features/pdv/comprovante'
@@ -68,6 +70,23 @@ export function PdvPage() {
   const { data: produtos, isLoading } = useProdutos()
   const finalizarVenda = useFinalizarVenda()
   const caixa = useCaixaAtual()
+  const promocoes = usePromocoesAtivas()
+  // Relógio do minuto: promoção de horário (ex.: depois das 18h) liga e desliga sozinha.
+  const [relogio, setRelogio] = useState(() => Date.now())
+  useEffect(() => {
+    const id = setInterval(() => setRelogio(Date.now()), 30_000)
+    return () => clearInterval(id)
+  }, [])
+  const tz = new Date(relogio).getTimezoneOffset()
+  const vigentes = useMemo(
+    () => (promocoes.data ?? []).filter((p) => promocaoVigente(p, new Date(relogio), tz)),
+    [promocoes.data, relogio, tz],
+  )
+  // Desconto manual no pedido (R$ ou %).
+  const [desconto, setDesconto] = useState<{ tipo: 'valor' | 'percentual'; texto: string }>({
+    tipo: 'percentual',
+    texto: '',
+  })
   const padaria = usePadaria()
   const { user } = useAuth()
   const buscaRef = useRef<HTMLInputElement>(null)
@@ -108,9 +127,35 @@ export function PdvPage() {
     return cart.map((line) => ({ ...line, produto: porId.get(line.produto.id) ?? line.produto }))
   }, [cart, produtos])
 
-  const total = arredondar(
-    pedido.reduce((sum, line) => sum + line.produto.preco_venda * line.quantidade, 0),
+  // Mesmo cálculo do servidor (src/lib/promocoes.ts): melhor promoção de cada item.
+  const calculo = useMemo(
+    () =>
+      aplicarPromocoes(
+        pedido.map((l) => ({
+          produto_id: l.produto.id,
+          categoria: l.produto.categoria,
+          unidade: l.produto.unidade,
+          quantidade: l.quantidade,
+          preco: l.produto.preco_venda,
+        })),
+        vigentes,
+        new Date(relogio),
+        tz,
+      ),
+    [pedido, vigentes, relogio, tz],
   )
+  const porItem = useMemo(() => new Map(calculo.map((c) => [c.produto_id, c])), [calculo])
+  const bruto = arredondar(calculo.reduce((s, c) => s + c.bruto, 0))
+  const descontoPromocoes = arredondar(calculo.reduce((s, c) => s + c.desconto, 0))
+  const aposPromocoes = arredondar(bruto - descontoPromocoes)
+  const valorDesconto = lerValor(desconto.texto) ?? 0
+  const descontoManual = arredondar(
+    Math.min(
+      aposPromocoes,
+      desconto.tipo === 'percentual' ? (aposPromocoes * Math.min(100, valorDesconto)) / 100 : valorDesconto,
+    ),
+  )
+  const total = arredondar(aposPromocoes - descontoManual)
   const qtdItens = pedido.reduce((sum, line) => sum + line.quantidade, 0)
   const qtdNoCarrinho = useMemo(
     () => new Map(cart.map((line) => [line.produto.id, line.quantidade])),
@@ -156,6 +201,7 @@ export function PdvPage() {
     setCart([])
     setRecebido('')
     setFormaPagamento('dinheiro')
+    setDesconto((d) => ({ ...d, texto: '' }))
   }
 
   async function handleFinalizar() {
@@ -173,7 +219,10 @@ export function PdvPage() {
         })),
         formaPagamento,
         recebido: valorRecebido,
+        descontoManual:
+          descontoManual > 0 ? { tipo: desconto.tipo, valor: valorDesconto } : null,
       })
+      const promoDoItem = new Map(venda.itens.map((i) => [i.produto_id, i]))
       setComprovante({
         vendaId: venda.id,
         quando: new Date().toISOString(),
@@ -182,8 +231,11 @@ export function PdvPage() {
           quantidade: line.quantidade,
           unidade: line.produto.unidade,
           precoUnitario: line.produto.preco_venda,
+          desconto: promoDoItem.get(line.produto.id)?.desconto || undefined,
+          promocao: promoDoItem.get(line.produto.id)?.promocao ?? null,
         })),
         total: venda.total,
+        descontos: venda.desconto_promocoes + venda.desconto_manual || undefined,
         formaPagamento:
           formasPagamento.find((f) => f.value === formaPagamento)?.label ?? formaPagamento,
         recebido: valorRecebido,
@@ -228,6 +280,12 @@ export function PdvPage() {
       cart={pedido}
       qtdItens={qtdItens}
       total={total}
+      porItem={porItem}
+      bruto={bruto}
+      descontoPromocoes={descontoPromocoes}
+      descontoManual={descontoManual}
+      desconto={desconto}
+      onDesconto={setDesconto}
       formaPagamento={formaPagamento}
       onFormaPagamento={setFormaPagamento}
       recebido={recebido}
@@ -330,6 +388,15 @@ export function PdvPage() {
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
               {produtosFiltrados.map((produto) => {
                 const noCarrinho = qtdNoCarrinho.get(produto.id)
+                const promo = vigentes.find((p) =>
+                  promocaoAlcanca(p, {
+                    produto_id: produto.id,
+                    categoria: produto.categoria,
+                    unidade: produto.unidade,
+                    quantidade: 1,
+                    preco: produto.preco_venda,
+                  }),
+                )
                 return (
                   <button
                     key={produto.id}
@@ -343,6 +410,11 @@ export function PdvPage() {
                     {noCarrinho && (
                       <span className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
                         {formatQuantidade(noCarrinho)}
+                      </span>
+                    )}
+                    {promo && (
+                      <span className="absolute top-2 left-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+                        {descreverPromocao(promo)}
                       </span>
                     )}
                     <IconeProduto produto={produto} tamanho="lg" />
@@ -425,10 +497,18 @@ export function PdvPage() {
   )
 }
 
+type ItemCalculado = { desconto: number; subtotal: number; promocao: { nome: string } | null }
+
 interface CarrinhoPainelProps {
   cart: CartLine[]
   qtdItens: number
   total: number
+  porItem: Map<string, ItemCalculado>
+  bruto: number
+  descontoPromocoes: number
+  descontoManual: number
+  desconto: { tipo: 'valor' | 'percentual'; texto: string }
+  onDesconto: (d: { tipo: 'valor' | 'percentual'; texto: string }) => void
   formaPagamento: FormaPagamento
   onFormaPagamento: (forma: FormaPagamento) => void
   recebido: string
@@ -446,6 +526,12 @@ function CarrinhoPainel({
   cart,
   qtdItens,
   total,
+  porItem,
+  bruto,
+  descontoPromocoes,
+  descontoManual,
+  desconto,
+  onDesconto,
   formaPagamento,
   onFormaPagamento,
   recebido,
@@ -462,6 +548,7 @@ function CarrinhoPainel({
   const troco = valorRecebido !== null ? arredondar(valorRecebido - total) : null
   const faltaDinheiro = troco !== null && troco < 0
   const vazio = cart.length === 0
+  const [mostrarDesconto, setMostrarDesconto] = useState(false)
 
   return (
     <>
@@ -494,6 +581,7 @@ function CarrinhoPainel({
           <LinhaPedido
             key={line.produto.id}
             line={line}
+            calculo={porItem.get(line.produto.id)}
             onQuantidade={onQuantidade}
             onDefinirQuantidade={onDefinirQuantidade}
             onRemover={onRemover}
@@ -561,8 +649,67 @@ function CarrinhoPainel({
         </fieldset>
 
         <div className="rounded-lg border bg-card p-3" aria-live="polite">
+          {!vazio && (descontoPromocoes > 0 || descontoManual > 0 || mostrarDesconto) && (
+            <div className="mb-2 space-y-1 border-b pb-2 text-sm">
+              <div className="flex justify-between text-muted-foreground">
+                <span>Subtotal</span>
+                <span className="tabular-nums">{formatBRL(bruto)}</span>
+              </div>
+              {descontoPromocoes > 0 && (
+                <div className="flex justify-between font-medium text-emerald-700">
+                  <span>Promoções</span>
+                  <span className="tabular-nums">− {formatBRL(descontoPromocoes)}</span>
+                </div>
+              )}
+              {mostrarDesconto && (
+                <div className="flex items-center gap-2">
+                  <span className="text-muted-foreground">Desconto</span>
+                  <div className="ml-auto flex rounded-md border p-0.5 text-xs">
+                    {(['percentual', 'valor'] as const).map((t) => (
+                      <button
+                        key={t}
+                        type="button"
+                        onClick={() => onDesconto({ ...desconto, tipo: t })}
+                        className={cn(
+                          'rounded px-1.5 py-0.5',
+                          desconto.tipo === t ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+                        )}
+                      >
+                        {t === 'percentual' ? '%' : 'R$'}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    inputMode="decimal"
+                    aria-label="Desconto no pedido"
+                    className="h-7 w-20 px-2 text-right text-sm tabular-nums"
+                    placeholder="0"
+                    value={desconto.texto}
+                    onChange={(e) => onDesconto({ ...desconto, texto: e.target.value.replace(/[^\d.,]/g, '') })}
+                  />
+                </div>
+              )}
+              {descontoManual > 0 && (
+                <div className="flex justify-between font-medium text-emerald-700">
+                  <span>Desconto no pedido</span>
+                  <span className="tabular-nums">− {formatBRL(descontoManual)}</span>
+                </div>
+              )}
+            </div>
+          )}
           <div className="flex items-baseline justify-between gap-2">
-            <span className="text-sm text-muted-foreground">Total</span>
+            <span className="flex items-center gap-2 text-sm text-muted-foreground">
+              Total
+              {!vazio && !mostrarDesconto && (
+                <button
+                  type="button"
+                  onClick={() => setMostrarDesconto(true)}
+                  className="rounded-full border px-2 py-0.5 text-[11px] font-medium hover:border-primary/60 hover:text-primary"
+                >
+                  + desconto
+                </button>
+              )}
+            </span>
             {/* key: cada mudança no total recria o número e dispara o "pulo". */}
             <span key={total} className="total-pulso font-heading text-3xl font-bold tabular-nums">
               {formatBRL(total)}
@@ -609,12 +756,19 @@ function CarrinhoPainel({
 
 interface LinhaPedidoProps {
   line: CartLine
+  calculo?: ItemCalculado
   onQuantidade: (produtoId: string, delta: number) => void
   onDefinirQuantidade: (produtoId: string, quantidade: number) => void
   onRemover: (produtoId: string) => void
 }
 
-function LinhaPedido({ line, onQuantidade, onDefinirQuantidade, onRemover }: LinhaPedidoProps) {
+function LinhaPedido({
+  line,
+  calculo,
+  onQuantidade,
+  onDefinirQuantidade,
+  onRemover,
+}: LinhaPedidoProps) {
   const { produto, quantidade } = line
   // Texto em edição: só vira número ao sair do campo (dá para apagar e digitar "0,35").
   const [editando, setEditando] = useState<string | null>(null)
@@ -638,10 +792,22 @@ function LinhaPedido({ line, onQuantidade, onDefinirQuantidade, onRemover }: Lin
         <p className="truncate text-sm font-medium">{produto.nome}</p>
         <p className="text-xs text-muted-foreground">
           {formatBRL(produto.preco_venda)}/{produto.unidade} ·{' '}
-          <span className="font-medium text-foreground tabular-nums">
-            {formatBRL(produto.preco_venda * quantidade)}
-          </span>
+          {calculo && calculo.desconto > 0 ? (
+            <>
+              <span className="line-through tabular-nums">{formatBRL(produto.preco_venda * quantidade)}</span>{' '}
+              <span className="font-semibold text-emerald-700 tabular-nums">{formatBRL(calculo.subtotal)}</span>
+            </>
+          ) : (
+            <span className="font-medium text-foreground tabular-nums">
+              {formatBRL(produto.preco_venda * quantidade)}
+            </span>
+          )}
         </p>
+        {calculo?.promocao && (
+          <p className="mt-0.5 inline-flex rounded-full bg-emerald-100 px-2 text-[10px] font-semibold text-emerald-800">
+            🏷️ {calculo.promocao.nome}
+          </p>
+        )}
       </div>
       <div className="ml-auto flex items-center gap-1">
         <Button

@@ -293,3 +293,26 @@ create table if not exists caixa_movimentos (
   created_at timestamp not null default current_timestamp,
   foreign key (caixa_id) references caixas (id) on delete cascade
 );
+
+-- Promoções automáticas (modelo dos grandes PDVs): % de desconto, R$ de desconto por unidade,
+-- preço fixo ou "leve X pague Y"; para produtos, categorias ou a loja toda; com período,
+-- dias da semana (0 = domingo) e horário. O PDV aplica sozinho o melhor desconto de cada item.
+create table if not exists promocoes (
+  id char(36) primary key,
+  padaria_id char(36) not null,
+  nome varchar(80) not null,
+  tipo enum('percentual', 'valor', 'preco_fixo', 'leve_pague') not null,
+  valor decimal(10, 2) not null default 0,
+  leve int null,
+  pague int null,
+  abrangencia enum('produtos', 'categorias', 'tudo') not null,
+  alvos json null,
+  inicio timestamp null,
+  fim timestamp null,
+  dias_semana json null,
+  hora_inicio char(5) null,
+  hora_fim char(5) null,
+  ativa boolean not null default true,
+  created_at timestamp not null default current_timestamp,
+  index promocoes_padaria_idx (padaria_id)
+);

@@ -22,6 +22,8 @@ export const paginas = {
   caixa: () => import('@/features/caixa/CaixaPage').then((m) => ({ default: m.CaixaPage })),
   margens: () => import('@/features/margens/MargensPage').then((m) => ({ default: m.MargensPage })),
   analise: () => import('@/features/analise/AnalisePage').then((m) => ({ default: m.AnalisePage })),
+  promocoes: () =>
+    import('@/features/promocoes/PromocoesPage').then((m) => ({ default: m.PromocoesPage })),
   equipe: () => import('@/features/equipe/EquipePage').then((m) => ({ default: m.EquipePage })),
 }
 

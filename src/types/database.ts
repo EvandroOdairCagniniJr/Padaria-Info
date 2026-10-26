@@ -318,6 +318,8 @@ export type VendaDetalhe = Omit<VendaHistorico, 'qtd_itens' | 'resumo'> & {
   vendedor_foto: string | null
   devolvida_em: string | null
   devolvida_por_nome: string | null
+  desconto_promocoes: number
+  desconto_manual: number
   motivo_devolucao: string | null
   itens: {
     id: string
@@ -327,5 +329,7 @@ export type VendaDetalhe = Omit<VendaHistorico, 'qtd_itens' | 'resumo'> & {
     quantidade: number
     preco_unitario: number
     subtotal: number
+    desconto: number
+    promocao: string | null
   }[]
 }

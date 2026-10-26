@@ -5,6 +5,8 @@ import { z } from 'zod'
 import { pool, transaction } from './db.ts'
 import { lerMetas, metaDaPessoa } from './metas.ts'
 import { caixaAberto } from './caixa.ts'
+import { promocoesAtivas } from './promocoes.ts'
+import { aplicarPromocoes, type ItemParaPromocao } from '../src/lib/promocoes.ts'
 import { exigirPapel, fotoSchema } from './auth.ts'
 import { HttpError, validar } from './http.ts'
 
@@ -300,7 +302,7 @@ apiRouter.get('/vendas/historico', async (req, res) => {
 apiRouter.get('/vendas/:id', async (req, res) => {
   const [[venda]] = await pool.query<RowDataPacket[]>(
     `select v.id, v.total, v.forma_pagamento, v.valor_recebido, v.created_at, v.created_by,
-            v.status, v.devolvida_em, v.motivo_devolucao,
+            v.status, v.devolvida_em, v.motivo_devolucao, v.desconto_promocoes, v.desconto_manual,
             u.nome as vendedor_nome, u.foto as vendedor_foto, d.nome as devolvida_por_nome
      from vendas v left join usuarios u on u.id = v.created_by
      left join usuarios d on d.id = v.devolvida_por
@@ -309,8 +311,10 @@ apiRouter.get('/vendas/:id', async (req, res) => {
   )
   if (!venda) throw new HttpError(404, 'Venda não encontrada')
   const [itens] = await pool.query(
-    `select i.id, p.nome, p.categoria, p.unidade, i.quantidade, i.preco_unitario, i.subtotal
+    `select i.id, p.nome, p.categoria, p.unidade, i.quantidade, i.preco_unitario, i.subtotal,
+            i.desconto, pr.nome as promocao
      from vendas_itens i join produtos p on p.id = i.produto_id
+     left join promocoes pr on pr.id = i.promocao_id
      where i.venda_id = ? order by i.subtotal desc`,
     [req.params.id],
   )
@@ -358,7 +362,11 @@ apiRouter.post('/vendas/:id/devolver', gestao, async (req, res) => {
   res.status(204).end()
 })
 
-// O preço vem sempre do cadastro, nunca do navegador.
+// Funcionário pode dar até este desconto manual; dono e gerência, sem limite.
+const LIMITE_DESCONTO_FUNCIONARIO = 0.1
+
+// O preço vem sempre do cadastro, nunca do navegador; as promoções são recalculadas aqui
+// (mesmas regras do PDV, em src/lib/promocoes.ts).
 apiRouter.post('/vendas', async (req, res) => {
   const venda = validar(
     z.object({
@@ -370,59 +378,113 @@ apiRouter.post('/vendas', async (req, res) => {
         'Forma de pagamento inválida',
       ),
       valor_recebido: z.number().nonnegative().nullish(),
+      // Desconto dado pelo caixa no pedido todo (R$ ou %).
+      desconto_manual: z
+        .object({ tipo: z.enum(['valor', 'percentual']), valor: z.number().nonnegative() })
+        .nullish(),
+      // Fuso do navegador (Date.getTimezoneOffset), para as promoções por dia/horário.
+      tz: z.number().min(-840).max(840).default(180),
     }),
     req.body,
   )
   const userId = usuarioId(res)
+  const papel = res.locals.usuario.papel as string
 
   const resultado = await transaction(async (conn) => {
+    const itens: ItemParaPromocao[] = []
+    for (const item of venda.itens) {
+      if (!(item.quantidade > 0)) throw new HttpError(400, 'Quantidade inválida em um dos itens')
+      const [rows] = await conn.query<RowDataPacket[]>(
+        `select preco_venda, categoria, unidade from produtos
+         where id = ? and padaria_id = ? and ativo = true`,
+        [item.produto_id, padariaId(res)],
+      )
+      if (!rows[0]) throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
+      itens.push({
+        produto_id: item.produto_id,
+        categoria: rows[0].categoria,
+        unidade: rows[0].unidade,
+        quantidade: item.quantidade,
+        preco: Number(rows[0].preco_venda),
+      })
+    }
+    const calculados = aplicarPromocoes(
+      itens,
+      await promocoesAtivas(conn, padariaId(res)),
+      new Date(),
+      venda.tz,
+    )
+    const centavos = (v: number) => Math.round(v * 100) / 100
+    const bruto = centavos(calculados.reduce((t, i) => t + i.bruto, 0))
+    const descontoPromocoes = centavos(calculados.reduce((t, i) => t + i.desconto, 0))
+    const aposPromocoes = centavos(bruto - descontoPromocoes)
+
+    let descontoManual = 0
+    if (venda.desconto_manual && venda.desconto_manual.valor > 0) {
+      const d = venda.desconto_manual
+      descontoManual = centavos(
+        Math.min(aposPromocoes, d.tipo === 'percentual' ? (aposPromocoes * Math.min(100, d.valor)) / 100 : d.valor),
+      )
+      if (papel === 'funcionario' && descontoManual > aposPromocoes * LIMITE_DESCONTO_FUNCIONARIO + 0.001) {
+        throw new HttpError(403, 'Desconto acima de 10% só com o gerente ou o dono.')
+      }
+    }
+    const total = centavos(aposPromocoes - descontoManual)
+
+    // O desconto manual é repartido entre os itens (proporcional), para que a soma dos itens
+    // bata com o total — relatórios de produto e margem usam o subtotal de cada item.
+    let restante = descontoManual
+    const finais = calculados.map((i, idx) => {
+      const parte =
+        idx === calculados.length - 1
+          ? restante
+          : aposPromocoes > 0
+            ? centavos((descontoManual * i.subtotal) / aposPromocoes)
+            : 0
+      restante = centavos(restante - parte)
+      return { ...i, desconto: centavos(i.desconto + parte), subtotal: centavos(i.subtotal - parte) }
+    })
+
     const vendaId = randomUUID()
     // A venda entra no caixa aberto de quem vendeu (se houver).
     const caixa = await caixaAberto(conn, padariaId(res), userId)
     await conn.query(
-      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by, caixa_id)
-       values (?, ?, 0, ?, ?, ?, ?)`,
+      `insert into vendas (id, padaria_id, total, forma_pagamento, valor_recebido, created_by, caixa_id,
+         desconto_promocoes, desconto_manual)
+       values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
         vendaId,
         padariaId(res),
+        total,
         venda.forma_pagamento,
         venda.forma_pagamento === 'dinheiro' ? (venda.valor_recebido ?? null) : null,
         userId,
         caixa?.id ?? null,
+        descontoPromocoes,
+        descontoManual,
       ],
     )
-
-    let total = 0
-    for (const item of venda.itens) {
-      if (!(item.quantidade > 0)) throw new HttpError(400, 'Quantidade inválida em um dos itens')
-      const [rows] = await conn.query<RowDataPacket[]>(
-        'select nome, preco_venda from produtos where id = ? and padaria_id = ? and ativo = true',
-        [item.produto_id, padariaId(res)],
-      )
-      if (!rows[0]) throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
-      const preco = Number(rows[0].preco_venda)
-      const subtotal = Math.round(item.quantidade * preco * 100) / 100
-      total += subtotal
-
+    for (const i of finais) {
       await conn.query(
-        `insert into vendas_itens (id, venda_id, produto_id, quantidade, preco_unitario, subtotal)
-         values (?, ?, ?, ?, ?, ?)`,
-        [randomUUID(), vendaId, item.produto_id, item.quantidade, preco, subtotal],
+        `insert into vendas_itens (id, venda_id, produto_id, quantidade, preco_unitario, subtotal,
+           desconto, promocao_id)
+         values (?, ?, ?, ?, ?, ?, ?, ?)`,
+        [randomUUID(), vendaId, i.produto_id, i.quantidade, i.preco, i.subtotal, i.desconto, i.promocao?.id ?? null],
       )
-      await registrarMovimentacao(
-        conn,
-        padariaId(res),
-        item.produto_id,
-        'saida',
-        item.quantidade,
-        'venda',
-        userId,
-      )
+      await registrarMovimentacao(conn, padariaId(res), i.produto_id, 'saida', i.quantidade, 'venda', userId)
     }
-
-    total = Math.round(total * 100) / 100
-    await conn.query('update vendas set total = ? where id = ?', [total, vendaId])
-    return { id: vendaId, total }
+    return {
+      id: vendaId,
+      total,
+      bruto,
+      desconto_promocoes: descontoPromocoes,
+      desconto_manual: descontoManual,
+      itens: calculados.map((i) => ({
+        produto_id: i.produto_id,
+        desconto: i.desconto,
+        promocao: i.promocao?.nome ?? null,
+      })),
+    }
   })
 
   // O total cobrado volta para o comprovante (o preço pode ter mudado com o pedido aberto).

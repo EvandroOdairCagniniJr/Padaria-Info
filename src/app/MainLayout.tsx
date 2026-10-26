@@ -13,6 +13,7 @@ import {
   Receipt,
   ShoppingCart,
   Store,
+  Tag,
   Target,
   Users,
   Warehouse,
@@ -57,6 +58,7 @@ const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
       { to: '/caixa', label: 'Caixa', icon: Banknote, papeis: todos },
       { to: '/vendas', label: 'Vendas', icon: Receipt, papeis: todos },
       { to: '/encomendas', label: 'Encomendas', icon: CalendarClock, papeis: todos },
+      { to: '/promocoes', label: 'Promoções', icon: Tag, papeis: gestao },
     ],
   },
   {

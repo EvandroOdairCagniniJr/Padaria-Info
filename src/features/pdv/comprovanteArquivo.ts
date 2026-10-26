@@ -184,11 +184,21 @@ function desenhar(ctx: CanvasRenderingContext2D, c: Comprovante, desenhar: boole
       12,
       { cor: cores.suave },
     )
+    if (item.desconto) {
+      y += 17
+      texto(item.promocao ?? 'Desconto', esq, 12, { cor: cores.ok })
+      texto(`− ${brl(item.desconto)}`, dir, 12, { cor: cores.ok, alinhar: 'right' })
+    }
   }
 
   // Total.
   y += 18
   separador(false)
+  if (c.descontos) {
+    y += 24
+    texto('Você economizou', esq, 13, { peso: 600, cor: cores.ok })
+    texto(`− ${brl(c.descontos)}`, dir, 13, { peso: 600, cor: cores.ok, alinhar: 'right' })
+  }
   y += 30
   texto('Total', esq, 16, { peso: 700 })
   texto(brl(c.total), dir, 18, { peso: 700, alinhar: 'right' })
