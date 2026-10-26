@@ -20,6 +20,7 @@ const MinhaPadariaPage = lazy(paginas.padaria)
 const MetasPage = lazy(paginas.metas)
 const EncomendasPage = lazy(paginas.encomendas)
 const CaixaPage = lazy(paginas.caixa)
+const MargensPage = lazy(paginas.margens)
 
 const carregando = (
   <div className="flex min-h-svh items-center justify-center">
@@ -56,6 +57,7 @@ export function AppRouter() {
               <Route index element={<DashboardPage />} />
               <Route path="produtos" element={<ProdutosPage />} />
               <Route path="financeiro" element={<FinanceiroPage />} />
+              <Route path="margens" element={<MargensPage />} />
             </Route>
 
             <Route element={<RequirePapel papeis={['dono']} />}>

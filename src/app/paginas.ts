@@ -20,6 +20,7 @@ export const paginas = {
   encomendas: () =>
     import('@/features/encomendas/EncomendasPage').then((m) => ({ default: m.EncomendasPage })),
   caixa: () => import('@/features/caixa/CaixaPage').then((m) => ({ default: m.CaixaPage })),
+  margens: () => import('@/features/margens/MargensPage').then((m) => ({ default: m.MargensPage })),
   equipe: () => import('@/features/equipe/EquipePage').then((m) => ({ default: m.EquipePage })),
 }
 
