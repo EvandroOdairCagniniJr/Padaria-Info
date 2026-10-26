@@ -25,3 +25,6 @@ dist-ssr
 
 # Configuração local do servidor (senha do MySQL etc.)
 .env
+
+# Banco PostgreSQL local (npm run banco:local)
+.banco-local

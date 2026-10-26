@@ -16,12 +16,12 @@ export function validar<T>(schema: ZodType<T>, data: unknown): T {
   return result.data
 }
 
-// Erros do MySQL mais comuns traduzidos para mensagens de balcão.
-const mensagensMysql: Record<number, [number, string]> = {
-  1451: [409, 'Este registro está sendo usado em outro lugar e não pode ser removido.'],
-  1452: [400, 'Um dos registros relacionados não existe mais.'],
-  3819: [400, 'Algum valor informado é inválido.'],
-  1062: [409, 'Já existe um registro com esses dados.'],
+// Erros do banco (códigos do PostgreSQL) traduzidos para mensagens de balcão.
+const mensagensBanco: Record<string, [number, string]> = {
+  '23503': [409, 'Este registro está ligado a outro e não pode ser removido ou alterado assim.'],
+  '23514': [400, 'Algum valor informado é inválido.'],
+  '23505': [409, 'Já existe um registro com esses dados.'],
+  '22P02': [400, 'Algum valor informado é inválido.'],
 }
 
 export function errorHandler(err: unknown, _req: Request, res: Response, _next: NextFunction) {
@@ -29,9 +29,9 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(err.status).json({ message: err.message })
     return
   }
-  const errno = (err as { errno?: number }).errno
-  if (errno && mensagensMysql[errno]) {
-    const [status, message] = mensagensMysql[errno]
+  const codigo = (err as { code?: string }).code
+  if (codigo && mensagensBanco[codigo]) {
+    const [status, message] = mensagensBanco[codigo]
     res.status(status).json({ message })
     return
   }

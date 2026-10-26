@@ -1,7 +1,7 @@
 // "Hoje na sua padaria": recomendações do dia geradas a partir dos dados — estoque, encomendas,
 // produção, perdas, preços, ritmo de vendas, metas, contas e caixa. Cada uma traz o próximo passo.
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import type { Usuario } from './auth.ts'
 import { lerConfig, pool } from './db.ts'
 import { HttpError } from './http.ts'
@@ -293,11 +293,11 @@ recomendacoesRouter.get('/', async (req, res) => {
 
     // 10. Horário de pico das últimas 4 semanas neste dia da semana.
     const [horas] = await pool.query<RowDataPacket[]>(
-      // unix_timestamp = instante real (sem o fuso da sessão do MySQL); 1/1/1970 foi quinta-feira.
-      `select floor(mod(unix_timestamp(created_at) - ?, 86400) / 3600) as hora, count(*) as vendas
+      // epoch = instante real em segundos (sem fuso); 1/1/1970 foi quinta-feira.
+      `select floor(mod((extract(epoch from created_at) - ?)::numeric, 86400) / 3600) as hora, count(*) as vendas
        from vendas where padaria_id = ? and status <> 'devolvida'
          and created_at >= ? and created_at < ?
-         and mod(floor((unix_timestamp(created_at) - ?) / 86400) + 3, 7) = ?
+         and mod((floor((extract(epoch from created_at) - ?) / 86400) + 3)::numeric, 7) = ?
        group by hora order by vendas desc limit 1`,
       [tz * 60, padariaId, new Date(inicio.getTime() - 28 * DIA), inicio, tz * 60, (new Date(inicio.getTime() + 12 * 3600e3).getUTCDay() + 6) % 7],
     )

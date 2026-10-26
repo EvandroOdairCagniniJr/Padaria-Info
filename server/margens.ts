@@ -1,7 +1,7 @@
 // Margem e CMV: custo real de cada produto (pela ficha técnica, quando existe), margem,
 // lucro bruto do período e preço sugerido para a meta de CMV da padaria.
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { exigirPapel } from './auth.ts'
 import { lerConfig, pool, salvarConfig } from './db.ts'
@@ -25,7 +25,7 @@ export async function custosDosProdutos(padariaId: string) {
   const [fichas] = await pool.query<RowDataPacket[]>(
     `select r.produto_id, r.rendimento,
             sum(i.quantidade * coalesce(ing.preco_custo, 0)) as custo_receita,
-            sum(ing.preco_custo is null) as sem_custo
+            count(*) filter (where ing.preco_custo is null) as sem_custo
      from receitas r
      join receita_itens i on i.receita_id = r.id
      join produtos ing on ing.id = i.ingrediente_id

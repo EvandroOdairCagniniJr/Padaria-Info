@@ -8,7 +8,7 @@ import {
   type Response,
 } from 'express'
 import jwt from 'jsonwebtoken'
-import type { RowDataPacket } from 'mysql2'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { novoCodigoConvite, pool } from './db.ts'
 import { HttpError, limitarTentativas, validar } from './http.ts'
@@ -133,7 +133,7 @@ authRouter.post('/login', async (req, res) => {
   const emailLimpo = email.trim().toLowerCase()
   const [rows] = await pool.query<RowDataPacket[]>(
     `select ${colunasUsuario}, ativo, ultimo_acesso, senha_hash, falhas_login,
-            greatest(timestampdiff(second, now(), bloqueado_ate), 0) as bloqueio_restante
+            greatest(extract(epoch from (bloqueado_ate - now())), 0) as bloqueio_restante
      from usuarios where email = ?`,
     [emailLimpo],
   )
@@ -151,7 +151,7 @@ authRouter.post('/login', async (req, res) => {
       const falhas = Number(u.falhas_login) + 1
       await pool.query(
         falhas >= MAX_FALHAS
-          ? `update usuarios set falhas_login = 0, bloqueado_ate = now() + interval ${BLOQUEIO_MIN} minute where id = ?`
+          ? `update usuarios set falhas_login = 0, bloqueado_ate = now() + interval '${BLOQUEIO_MIN} minutes' where id = ?`
           : 'update usuarios set falhas_login = falhas_login + 1 where id = ?',
         [u.id],
       )
@@ -262,16 +262,16 @@ authRouter.post('/esqueci-senha', async (req, res) => {
   if (u?.ativo) {
     // Um pedido por minuto por conta: evita encher a caixa de entrada.
     const [recente] = await pool.query<RowDataPacket[]>(
-      'select 1 from codigos_senha where usuario_id = ? and created_at > now() - interval 1 minute',
+      `select 1 from codigos_senha where usuario_id = ? and created_at > now() - interval '1 minute'`,
       [u.id],
     )
     if (!recente.length) {
       const codigo = String(randomInt(0, 1_000_000)).padStart(6, '0')
       await pool.query(
         `insert into codigos_senha (usuario_id, codigo_hash, expira_em, tentativas, created_at)
-         values (?, ?, now() + interval 15 minute, 0, now())
-         on duplicate key update codigo_hash = values(codigo_hash), expira_em = values(expira_em),
-           tentativas = 0, created_at = now()`,
+         values (?, ?, now() + interval '15 minutes', 0, now())
+         on conflict (usuario_id) do update set codigo_hash = excluded.codigo_hash,
+           expira_em = excluded.expira_em, tentativas = 0, created_at = now()`,
         [u.id, hashCodigo(u.id, codigo)],
       )
       const padaria = (await lerPadaria(u.padaria_id))?.nome_fantasia || 'Padaria Info'

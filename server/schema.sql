@@ -1,332 +1,339 @@
--- Padaria Info — schema MySQL 8. Aplicado automaticamente ao iniciar o servidor
--- (todas as instruções são idempotentes). As regras de negócio que antes eram
--- funções no Supabase (venda, movimentação de estoque, produção, receita) estão em
--- server/routes.ts, dentro de transações.
+-- Padaria Info — schema PostgreSQL (Supabase). Aplicado automaticamente ao iniciar o servidor;
+-- todas as instruções são idempotentes (rodar de novo não estraga nada).
+--
+-- Tudo fica no schema "padaria", FORA do schema public: a API automática do Supabase (PostgREST)
+-- só expõe o public, então ninguém acessa estas tabelas pela URL do projeto. Como segunda trava,
+-- todas têm RLS ligado sem políticas (só o servidor, que conecta como dono das tabelas, enxerga).
+--
+-- Multi-padaria: toda tabela de negócio tem padaria_id e toda consulta do servidor filtra por ele.
+-- Ids são UUIDs gerados pelo servidor (texto). Dinheiro em numeric(10,2); datas/horas em timestamptz.
+
+create schema if not exists padaria;
+-- Nenhum papel além do dono usa o schema (anon/authenticated do Supabase ficam de fora).
+revoke all on schema padaria from public;
+set search_path to padaria;
+
+-- Padarias (SaaS). dados = cadastro (nome, CNPJ, endereço...) em JSON.
+-- codigo_convite: o funcionário informa em "Criar conta" para pedir acesso à equipe.
+create table if not exists padarias (
+  id text primary key,
+  dados jsonb not null,
+  codigo_convite char(8) not null unique,
+  created_at timestamptz not null default now()
+);
 
 -- papel: dono (tudo + Equipe), admin (gerente: toda a operação), funcionario (PDV, estoque, produção).
--- Colunas acrescentadas depois da primeira versão também estão em db.ts (colunasNovas),
--- para bancos já criados.
 create table if not exists usuarios (
-  id char(36) primary key default (uuid()),
+  id text primary key,
+  padaria_id text references padarias (id),
   nome varchar(255) not null default '',
   email varchar(255) not null unique,
   senha_hash varchar(255) not null,
-  papel enum('dono', 'admin', 'funcionario') not null default 'funcionario',
-  -- cargo: a função na padaria (Caixa, Padeiro(a)...), só para exibição; quem manda no acesso é o papel.
+  papel text not null default 'funcionario' check (papel in ('dono', 'admin', 'funcionario')),
+  -- cargo: a função na padaria (Caixa, Padeiro(a)...), só para exibição.
   cargo varchar(60) not null default '',
-  -- foto: data URL JPEG pequena (o navegador reduz para 256px antes de enviar).
-  foto mediumtext null,
-  -- Cadastro: documentos e telefones só com dígitos; endereço e contato de emergência em JSON.
-  telefone varchar(11) null,
-  cpf char(11) null,
-  data_nascimento date null,
-  data_admissao date null,
-  turno enum('manha', 'tarde', 'noite', 'madrugada', 'integral') null,
-  endereco json null,
-  contato_emergencia json null,
-  observacoes text null,
+  foto text,
+  telefone varchar(11),
+  cpf char(11),
+  data_nascimento date,
+  data_admissao date,
+  turno text check (turno in ('manha', 'tarde', 'noite', 'madrugada', 'integral')),
+  endereco jsonb,
+  contato_emergencia jsonb,
+  observacoes text,
   ativo boolean not null default true,
-  ultimo_acesso timestamp null,
-  created_at timestamp not null default current_timestamp
+  ultimo_acesso timestamptz,
+  -- Segurança: bloqueio após senhas erradas e versão da sessão (trocar a senha derruba logins).
+  falhas_login int not null default 0,
+  bloqueado_ate timestamptz,
+  sessao_versao int not null default 0,
+  created_at timestamptz not null default now()
 );
+create index if not exists usuarios_padaria_idx on usuarios (padaria_id);
 
 create table if not exists produtos (
-  id char(36) primary key default (uuid()),
+  id text primary key,
+  padaria_id text not null references padarias (id),
   nome varchar(255) not null,
   categoria varchar(255),
+  -- Variedade de: produtos com o mesmo grupo (ex.: "Café") viram um card só no PDV.
+  grupo varchar(80),
   unidade varchar(20) not null default 'un',
-  preco_venda decimal(10, 2) not null check (preco_venda >= 0),
-  preco_custo decimal(10, 2) check (preco_custo >= 0),
-  estoque_atual decimal(10, 3) not null default 0,
-  estoque_minimo decimal(10, 3) not null default 0,
+  preco_venda numeric(10, 2) not null check (preco_venda >= 0),
+  preco_custo numeric(10, 2) check (preco_custo >= 0),
+  estoque_atual numeric(10, 3) not null default 0,
+  estoque_minimo numeric(10, 3) not null default 0,
   ativo boolean not null default true,
-  -- Vitrine: emoji escolhido (vazio = automático pelo nome) e foto pequena opcional.
   emoji varchar(16),
-  foto mediumtext,
-  created_at timestamp not null default current_timestamp
+  foto text,
+  created_at timestamptz not null default now()
 );
+create index if not exists produtos_padaria_idx on produtos (padaria_id);
 
 create table if not exists movimentacoes_estoque (
-  id char(36) primary key default (uuid()),
-  produto_id char(36) not null,
-  tipo enum('entrada', 'saida', 'ajuste') not null,
-  quantidade decimal(10, 3) not null,
+  id text primary key,
+  padaria_id text not null,
+  produto_id text not null references produtos (id),
+  tipo text not null check (tipo in ('entrada', 'saida', 'ajuste')),
+  quantidade numeric(10, 3) not null,
   motivo varchar(255),
-  created_at timestamp not null default current_timestamp,
-  created_by char(36),
-  foreign key (produto_id) references produtos (id),
-  foreign key (created_by) references usuarios (id)
+  created_at timestamptz not null default now(),
+  created_by text references usuarios (id)
 );
+create index if not exists movimentacoes_padaria_idx on movimentacoes_estoque (padaria_id, created_at);
+create index if not exists movimentacoes_created_by_idx on movimentacoes_estoque (created_by, created_at);
 
-create table if not exists vendas (
-  id char(36) primary key default (uuid()),
-  total decimal(10, 2) not null check (total >= 0),
-  forma_pagamento enum('dinheiro', 'cartao_credito', 'cartao_debito', 'pix') not null,
-  valor_recebido decimal(10, 2) null,
-  -- concluida | devolvida (devolvida não entra em nenhum total; o estoque já voltou).
-  status varchar(20) not null default 'concluida',
-  devolvida_em timestamp null,
-  devolvida_por char(36) null,
-  motivo_devolucao varchar(255) null,
-  created_at timestamp not null default current_timestamp,
-  created_by char(36),
-  index vendas_created_at_idx (created_at),
-  foreign key (created_by) references usuarios (id)
+-- Caixa (gaveta) de cada operador: abertura com fundo de troco, sangrias/suprimentos e fechamento.
+create table if not exists caixas (
+  id text primary key,
+  padaria_id text not null,
+  operador_id text not null references usuarios (id),
+  aberto_em timestamptz not null default now(),
+  fundo_troco numeric(10, 2) not null default 0,
+  fechado_em timestamptz,
+  -- Fechamento: o que o sistema esperava e o que foi contado, por forma de pagamento.
+  esperado jsonb,
+  contado jsonb,
+  diferenca numeric(10, 2),
+  observacoes varchar(500)
 );
+create index if not exists caixas_padaria_idx on caixas (padaria_id, aberto_em);
+create index if not exists caixas_operador_idx on caixas (operador_id, fechado_em);
+
+-- status: concluida | devolvida (devolvida não entra em nenhum total; o estoque já voltou).
+create table if not exists vendas (
+  id text primary key,
+  padaria_id text not null,
+  total numeric(10, 2) not null check (total >= 0),
+  forma_pagamento text not null
+    check (forma_pagamento in ('dinheiro', 'cartao_credito', 'cartao_debito', 'pix')),
+  -- Quanto o cliente entregou em dinheiro (para o troco na 2ª via do comprovante).
+  valor_recebido numeric(10, 2),
+  status varchar(20) not null default 'concluida',
+  devolvida_em timestamptz,
+  devolvida_por text,
+  motivo_devolucao varchar(255),
+  desconto_promocoes numeric(10, 2) not null default 0,
+  desconto_manual numeric(10, 2) not null default 0,
+  caixa_id text,
+  created_at timestamptz not null default now(),
+  created_by text references usuarios (id)
+);
+create index if not exists vendas_padaria_data_idx on vendas (padaria_id, created_at);
+create index if not exists vendas_created_by_idx on vendas (created_by, created_at);
+create index if not exists vendas_caixa_idx on vendas (caixa_id);
 
 create table if not exists vendas_itens (
-  id char(36) primary key default (uuid()),
-  venda_id char(36) not null,
-  produto_id char(36) not null,
-  quantidade decimal(10, 3) not null check (quantidade > 0),
-  preco_unitario decimal(10, 2) not null check (preco_unitario >= 0),
-  subtotal decimal(10, 2) not null check (subtotal >= 0),
-  foreign key (venda_id) references vendas (id) on delete cascade,
-  foreign key (produto_id) references produtos (id)
+  id text primary key,
+  venda_id text not null references vendas (id) on delete cascade,
+  produto_id text not null references produtos (id),
+  quantidade numeric(10, 3) not null check (quantidade > 0),
+  preco_unitario numeric(10, 2) not null check (preco_unitario >= 0),
+  subtotal numeric(10, 2) not null check (subtotal >= 0),
+  -- Desconto do item (promoção e parte do desconto manual) e a promoção aplicada.
+  desconto numeric(10, 2) not null default 0,
+  promocao_id text
 );
+create index if not exists vendas_itens_venda_idx on vendas_itens (venda_id);
+create index if not exists vendas_itens_produto_idx on vendas_itens (produto_id);
 
 create table if not exists contas_financeiras (
-  id char(36) primary key default (uuid()),
-  tipo enum('pagar', 'receber') not null,
+  id text primary key,
+  padaria_id text not null,
+  tipo text not null check (tipo in ('pagar', 'receber')),
   descricao varchar(255) not null,
   categoria varchar(255),
-  valor decimal(10, 2) not null check (valor >= 0),
+  valor numeric(10, 2) not null check (valor >= 0),
   data_vencimento date not null,
   data_pagamento date,
-  status enum('pendente', 'pago', 'cancelado') not null default 'pendente',
+  status text not null default 'pendente' check (status in ('pendente', 'pago', 'cancelado')),
   forma_pagamento varchar(50),
   observacoes text,
-  created_at timestamp not null default current_timestamp,
-  created_by char(36),
-  index contas_tipo_status_idx (tipo, status),
-  index contas_vencimento_idx (data_vencimento),
-  foreign key (created_by) references usuarios (id)
+  created_at timestamptz not null default now(),
+  created_by text references usuarios (id)
 );
+create index if not exists contas_padaria_idx on contas_financeiras (padaria_id, data_vencimento);
 
 create table if not exists receitas (
-  id char(36) primary key default (uuid()),
-  produto_id char(36) not null,
+  id text primary key,
+  padaria_id text not null,
+  produto_id text not null references produtos (id),
   nome varchar(255) not null,
-  rendimento decimal(10, 3) not null check (rendimento > 0),
+  rendimento numeric(10, 3) not null check (rendimento > 0),
   modo_preparo text,
-  created_at timestamp not null default current_timestamp,
-  foreign key (produto_id) references produtos (id)
+  created_at timestamptz not null default now()
 );
+create index if not exists receitas_padaria_idx on receitas (padaria_id);
 
 create table if not exists receita_itens (
-  id char(36) primary key default (uuid()),
-  receita_id char(36) not null,
-  ingrediente_id char(36) not null,
-  quantidade decimal(10, 3) not null check (quantidade > 0),
-  foreign key (receita_id) references receitas (id) on delete cascade,
-  foreign key (ingrediente_id) references produtos (id)
+  id text primary key,
+  receita_id text not null references receitas (id) on delete cascade,
+  ingrediente_id text not null references produtos (id),
+  quantidade numeric(10, 3) not null check (quantidade > 0)
 );
+create index if not exists receita_itens_receita_idx on receita_itens (receita_id);
 
 create table if not exists producoes (
-  id char(36) primary key default (uuid()),
-  receita_id char(36) not null,
+  id text primary key,
+  padaria_id text not null,
+  receita_id text not null references receitas (id),
   data date not null,
-  status enum('planejado', 'concluido', 'cancelado') not null default 'planejado',
+  status text not null default 'planejado' check (status in ('planejado', 'concluido', 'cancelado')),
   observacoes text,
-  created_at timestamp not null default current_timestamp,
-  created_by char(36),
-  concluida_em timestamp null,
-  concluida_por char(36),
-  index producoes_status_idx (status),
-  foreign key (receita_id) references receitas (id),
-  foreign key (created_by) references usuarios (id),
-  foreign key (concluida_por) references usuarios (id)
+  created_at timestamptz not null default now(),
+  created_by text references usuarios (id),
+  concluida_em timestamptz,
+  concluida_por text references usuarios (id)
 );
+create index if not exists producoes_padaria_idx on producoes (padaria_id, data);
 
--- Configurações da padaria (ex: meta_diaria_vendas).
-create table if not exists configuracoes (
-  chave varchar(60) primary key,
-  valor mediumtext not null
-);
-
--- Foto escolhida para uma categoria de produto (sem linha aqui = ícone automático pelo nome).
--- A categoria em si continua sendo o texto em produtos.categoria.
-create table if not exists categorias (
-  nome varchar(255) primary key,
-  foto mediumtext not null
-);
-
--- Histórico de mudanças de perfil (nome, cargo, papel, foto): avisa dono e gerência e marca
--- as promoções (cargo/papel trocado por outra pessoa) com um selo na Equipe.
-create table if not exists historico_perfil (
-  id char(36) primary key default (uuid()),
-  usuario_id char(36) not null,
-  campo enum('nome', 'cargo', 'papel', 'foto') not null,
-  valor_antigo varchar(255),
-  valor_novo varchar(255),
-  alterado_por char(36),
-  created_at timestamp(3) not null default current_timestamp(3),
-  index historico_perfil_created_idx (created_at),
-  foreign key (usuario_id) references usuarios (id),
-  foreign key (alterado_por) references usuarios (id)
-);
-
--- Esqueci minha senha: código de 6 dígitos enviado por e-mail (guardado só o hash).
--- Vale 15 minutos e aceita poucas tentativas; um pedido novo substitui o anterior.
-create table if not exists codigos_senha (
-  usuario_id char(36) primary key,
-  codigo_hash char(64) not null,
-  expira_em timestamp not null,
-  tentativas int not null default 0,
-  created_at timestamp not null default current_timestamp,
-  foreign key (usuario_id) references usuarios (id) on delete cascade
-);
-
--- Multi-padaria (SaaS): cada padaria tem seus dados; toda tabela de negócio tem padaria_id
--- (acrescentada em db.ts, colunasNovas). dados = cadastro da padaria (nome, CNPJ...) em JSON.
--- codigo_convite: o funcionário informa em "Criar conta" para pedir acesso à equipe.
-create table if not exists padarias (
-  id char(36) primary key,
-  dados json not null,
-  codigo_convite char(8) not null unique,
-  created_at timestamp not null default current_timestamp
-);
-
--- Configurações por padaria (ex.: metas). Substitui a antiga tabela configuracoes.
+-- Configurações por padaria (ex.: meta de CMV).
 create table if not exists padaria_config (
-  padaria_id char(36) not null,
+  padaria_id text not null,
   chave varchar(60) not null,
-  valor mediumtext not null,
+  valor text not null,
   primary key (padaria_id, chave)
 );
 
--- Foto de uma categoria de produto, por padaria. Substitui a antiga tabela categorias.
+-- Foto de uma categoria de produto, por padaria.
 create table if not exists categorias_fotos (
-  padaria_id char(36) not null,
+  padaria_id text not null,
   nome varchar(255) not null,
-  foto mediumtext not null,
+  foto text not null,
   primary key (padaria_id, nome)
 );
 
--- Metas de vendas definidas pelo dono. alvo: 'geral' (a padaria toda), 'pessoa' (padrão para
--- cada membro da equipe) ou o id de um usuário (meta individual, vale no lugar do padrão).
+-- Histórico de mudanças de perfil (nome, cargo, papel, foto).
+create table if not exists historico_perfil (
+  id text primary key,
+  padaria_id text,
+  usuario_id text not null references usuarios (id),
+  campo text not null check (campo in ('nome', 'cargo', 'papel', 'foto')),
+  valor_antigo varchar(255),
+  valor_novo varchar(255),
+  alterado_por text references usuarios (id),
+  created_at timestamptz not null default now()
+);
+create index if not exists historico_perfil_padaria_idx on historico_perfil (padaria_id, created_at);
+
+-- Esqueci minha senha: código de 6 dígitos (só o hash), 15 minutos, poucas tentativas.
+create table if not exists codigos_senha (
+  usuario_id text primary key references usuarios (id) on delete cascade,
+  codigo_hash char(64) not null,
+  expira_em timestamptz not null,
+  tentativas int not null default 0,
+  created_at timestamptz not null default now()
+);
+
+-- Metas de vendas. alvo: 'geral' (padaria toda), 'pessoa' (padrão da equipe) ou id de usuário.
 create table if not exists metas (
-  padaria_id char(36) not null,
+  padaria_id text not null,
   alvo varchar(36) not null,
-  periodo enum('dia', 'semana', 'mes') not null,
-  valor decimal(12, 2) not null check (valor > 0),
+  periodo text not null check (periodo in ('dia', 'semana', 'mes')),
+  valor numeric(12, 2) not null check (valor > 0),
   primary key (padaria_id, alvo, periodo)
 );
 
--- Perdas: o que foi para o lixo (sobra do dia, vencido, queimado...). Também baixa o estoque
--- (movimentação 'saida' com motivo 'perda'). custo_unitario = preço de custo no momento.
+-- Perdas (sobra, vencido, queimado...). custo_unitario = preço de custo no momento.
 create table if not exists perdas (
-  id char(36) primary key,
-  padaria_id char(36) not null,
-  produto_id char(36) not null,
-  quantidade decimal(10, 3) not null check (quantidade > 0),
-  motivo enum('sobra', 'vencido', 'queimado', 'quebra', 'outro') not null,
+  id text primary key,
+  padaria_id text not null,
+  produto_id text not null references produtos (id),
+  quantidade numeric(10, 3) not null check (quantidade > 0),
+  motivo text not null check (motivo in ('sobra', 'vencido', 'queimado', 'quebra', 'outro')),
   observacao varchar(255),
-  custo_unitario decimal(10, 2) not null default 0,
-  created_by char(36),
-  created_at timestamp not null default current_timestamp,
-  index perdas_padaria_data_idx (padaria_id, created_at),
-  foreign key (produto_id) references produtos (id)
+  custo_unitario numeric(10, 2) not null default 0,
+  created_by text,
+  created_at timestamptz not null default now()
 );
+create index if not exists perdas_padaria_data_idx on perdas (padaria_id, created_at);
 
--- Encomendas (bolos, salgados para festa...): número sequencial por padaria, retirada/entrega
--- agendada, sinal e status. Ao entregar vira uma venda (venda_id) e baixa o estoque.
+-- Encomendas: número sequencial por padaria, sinal e status. Ao entregar vira venda (venda_id).
 create table if not exists encomendas (
-  id char(36) primary key,
-  padaria_id char(36) not null,
+  id text primary key,
+  padaria_id text not null,
   numero int not null,
   cliente_nome varchar(120) not null,
   cliente_telefone varchar(11),
-  retirada_em timestamp not null,
+  retirada_em timestamptz not null,
   entrega boolean not null default false,
   endereco varchar(255),
-  status enum('reservada', 'confirmada', 'em_producao', 'pronta', 'entregue', 'cancelada')
-    not null default 'reservada',
-  total decimal(10, 2) not null default 0,
-  sinal decimal(10, 2) not null default 0,
-  forma_sinal enum('dinheiro', 'cartao_credito', 'cartao_debito', 'pix'),
+  status text not null default 'reservada'
+    check (status in ('reservada', 'confirmada', 'em_producao', 'pronta', 'entregue', 'cancelada')),
+  total numeric(10, 2) not null default 0,
+  sinal numeric(10, 2) not null default 0,
+  forma_sinal text check (forma_sinal in ('dinheiro', 'cartao_credito', 'cartao_debito', 'pix')),
   observacoes text,
-  venda_id char(36),
-  created_by char(36),
-  created_at timestamp not null default current_timestamp,
-  unique key encomendas_numero_uk (padaria_id, numero),
-  index encomendas_retirada_idx (padaria_id, retirada_em)
+  venda_id text,
+  caixa_sinal_id text,
+  created_by text,
+  created_at timestamptz not null default now(),
+  unique (padaria_id, numero)
 );
+create index if not exists encomendas_retirada_idx on encomendas (padaria_id, retirada_em);
+create index if not exists encomendas_venda_idx on encomendas (venda_id);
 
 create table if not exists encomendas_itens (
-  id char(36) primary key,
-  encomenda_id char(36) not null,
-  produto_id char(36) not null,
-  quantidade decimal(10, 3) not null check (quantidade > 0),
-  preco_unitario decimal(10, 2) not null check (preco_unitario >= 0),
-  subtotal decimal(10, 2) not null,
-  foreign key (encomenda_id) references encomendas (id) on delete cascade,
-  foreign key (produto_id) references produtos (id)
-);
-
--- Caixa (gaveta) de cada operador: abertura com fundo de troco, sangrias/suprimentos e
--- fechamento com a contagem. As vendas guardam o caixa em que entraram (vendas.caixa_id).
-create table if not exists caixas (
-  id char(36) primary key,
-  padaria_id char(36) not null,
-  operador_id char(36) not null,
-  aberto_em timestamp not null default current_timestamp,
-  fundo_troco decimal(10, 2) not null default 0,
-  fechado_em timestamp null,
-  -- Fechamento: o que o sistema esperava e o que foi contado, por forma de pagamento (JSON).
-  esperado json null,
-  contado json null,
-  diferenca decimal(10, 2) null,
-  observacoes varchar(500),
-  index caixas_padaria_idx (padaria_id, aberto_em),
-  index caixas_operador_idx (operador_id, fechado_em)
+  id text primary key,
+  encomenda_id text not null references encomendas (id) on delete cascade,
+  produto_id text not null references produtos (id),
+  quantidade numeric(10, 3) not null check (quantidade > 0),
+  preco_unitario numeric(10, 2) not null check (preco_unitario >= 0),
+  subtotal numeric(10, 2) not null
 );
 
 create table if not exists caixa_movimentos (
-  id char(36) primary key,
-  padaria_id char(36) not null,
-  caixa_id char(36) not null,
-  tipo enum('sangria', 'suprimento') not null,
-  valor decimal(10, 2) not null check (valor > 0),
+  id text primary key,
+  padaria_id text not null,
+  caixa_id text not null references caixas (id) on delete cascade,
+  tipo text not null check (tipo in ('sangria', 'suprimento')),
+  valor numeric(10, 2) not null check (valor > 0),
   motivo varchar(255),
-  created_by char(36),
-  created_at timestamp not null default current_timestamp,
-  foreign key (caixa_id) references caixas (id) on delete cascade
+  created_by text,
+  created_at timestamptz not null default now()
 );
 
--- Promoções automáticas (modelo dos grandes PDVs): % de desconto, R$ de desconto por unidade,
--- preço fixo ou "leve X pague Y"; para produtos, categorias ou a loja toda; com período,
--- dias da semana (0 = domingo) e horário. O PDV aplica sozinho o melhor desconto de cada item.
+-- Promoções automáticas: %, R$ por unidade, preço fixo ou leve X pague Y; com período,
+-- dias da semana (0 = domingo) e horário.
 create table if not exists promocoes (
-  id char(36) primary key,
-  padaria_id char(36) not null,
+  id text primary key,
+  padaria_id text not null,
   nome varchar(80) not null,
-  tipo enum('percentual', 'valor', 'preco_fixo', 'leve_pague') not null,
-  valor decimal(10, 2) not null default 0,
-  leve int null,
-  pague int null,
-  abrangencia enum('produtos', 'categorias', 'tudo') not null,
-  alvos json null,
-  inicio timestamp null,
-  fim timestamp null,
-  dias_semana json null,
-  hora_inicio char(5) null,
-  hora_fim char(5) null,
+  tipo text not null check (tipo in ('percentual', 'valor', 'preco_fixo', 'leve_pague')),
+  valor numeric(10, 2) not null default 0,
+  leve int,
+  pague int,
+  abrangencia text not null check (abrangencia in ('produtos', 'categorias', 'tudo')),
+  alvos jsonb,
+  inicio timestamptz,
+  fim timestamptz,
+  dias_semana jsonb,
+  hora_inicio char(5),
+  hora_fim char(5),
   ativa boolean not null default true,
-  created_at timestamp not null default current_timestamp,
-  index promocoes_padaria_idx (padaria_id)
+  created_at timestamptz not null default now()
 );
+create index if not exists promocoes_padaria_idx on promocoes (padaria_id);
 
--- Registro de acessos: logins (certos e errados), bloqueios, códigos de recuperação e trocas
--- de senha, com IP e navegador. O dono vê os da padaria em Equipe.
+-- Registro de acessos (logins, falhas, bloqueios, recuperação e troca de senha).
 create table if not exists log_acessos (
-  id char(36) primary key,
-  padaria_id char(36) null,
-  usuario_id char(36) null,
-  email varchar(255) null,
+  id text primary key,
+  padaria_id text,
+  usuario_id text,
+  email varchar(255),
   evento varchar(30) not null,
-  ip varchar(64) null,
-  navegador varchar(255) null,
-  created_at timestamp not null default current_timestamp,
-  index log_acessos_padaria_idx (padaria_id, created_at)
+  ip varchar(64),
+  navegador varchar(255),
+  created_at timestamptz not null default now()
 );
+create index if not exists log_acessos_padaria_idx on log_acessos (padaria_id, created_at);
+
+-- Segunda trava: RLS em todas as tabelas, sem políticas. O servidor conecta como dono das
+-- tabelas (que ignora o RLS); qualquer outro papel do Supabase (anon, authenticated) não lê nada.
+do $$
+declare t text;
+begin
+  for t in select tablename from pg_tables where schemaname = 'padaria' loop
+    execute format('alter table padaria.%I enable row level security', t);
+  end loop;
+end $$;

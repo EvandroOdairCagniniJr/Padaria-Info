@@ -13,7 +13,9 @@
     "preview": "vite preview",
     "server": "node server/index.ts",
     "start": "npm run build && node server/index.ts",
-    "dev:server": "node --watch server/index.ts"
+    "dev:server": "node --watch server/index.ts",
+    "banco:local": "node scripts/banco-local.mjs",
+    "migrar:mysql": "node scripts/migrar-mysql.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
@@ -28,9 +30,9 @@
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",
     "lucide-react": "^1.37.0",
-    "mysql2": "^3.14.1",
     "next-themes": "^0.4.6",
     "nodemailer": "^10.2.1",
+    "pg": "^8.23.1",
     "radix-ui": "^1.6.7",
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
@@ -43,6 +45,8 @@
     "zod": "^4.5.4"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.12",
+    "@electric-sql/pglite-socket": "^0.2.15",
     "@tailwindcss/vite": "^4.3.3",
     "@types/compression": "^1.8.1",
     "@types/cookie-parser": "^1.4.9",
@@ -50,9 +54,11 @@
     "@types/jsonwebtoken": "^9.0.10",
     "@types/node": "^24.13.3",
     "@types/nodemailer": "^8.0.2",
+    "@types/pg": "^8.23.1",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@vitejs/plugin-react": "^6.1.0",
+    "mysql2": "^3.14.1",
     "oxlint": "^1.79.0",
     "tailwindcss": "^4.3.3",
     "typescript": "~6.0.2",

@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import { Router, type Response } from 'express'
-import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
+import type { PoolConnection, RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { pool, transaction } from './db.ts'
 import { lerMetas, metaDaPessoa } from './metas.ts'
@@ -54,7 +54,7 @@ async function atualizar(
   const entradas = Object.entries(campos).filter(([, v]) => v !== undefined)
   if (entradas.length === 0) return
   const [result] = await pool.query<RowDataPacket[] & { affectedRows: number }>(
-    `update ${tabela} set ${entradas.map(([k]) => `\`${k}\` = ?`).join(', ')}
+    `update ${tabela} set ${entradas.map(([k]) => `"${k}" = ?`).join(', ')}
      where id = ? and padaria_id = ?`,
     [...entradas.map(([, v]) => v), id, padaria],
   )
@@ -136,7 +136,7 @@ apiRouter.put('/categorias/foto', gestao, async (req, res) => {
   if (foto) {
     await pool.query(
       `insert into categorias_fotos (padaria_id, nome, foto) values (?, ?, ?)
-       on duplicate key update foto = values(foto)`,
+       on conflict (padaria_id, nome) do update set foto = excluded.foto`,
       [padariaId(res), nome, foto],
     )
   } else {
@@ -263,7 +263,7 @@ apiRouter.get('/vendas/historico', async (req, res) => {
     `select v.id, v.total, v.forma_pagamento, v.valor_recebido, v.created_at, v.created_by,
             v.status, u.nome as vendedor_nome,
             (select count(*) from vendas_itens i where i.venda_id = v.id) as qtd_itens,
-            (select group_concat(p.nome order by i.subtotal desc separator ', ')
+            (select string_agg(p.nome, ', ' order by i.subtotal desc)
                from vendas_itens i join produtos p on p.id = i.produto_id
                where i.venda_id = v.id) as resumo
      from vendas v left join usuarios u on u.id = v.created_by
@@ -278,9 +278,9 @@ apiRouter.get('/vendas/historico', async (req, res) => {
   let totais = null
   if (!cursor) {
     const [[t]] = await pool.query<RowDataPacket[]>(
-      `select sum(v.status <> 'devolvida') as quantidade,
+      `select count(*) filter (where v.status <> 'devolvida') as quantidade,
               coalesce(sum(case when v.status <> 'devolvida' then v.total end), 0) as total,
-              sum(v.status = 'devolvida') as devolvidas,
+              count(*) filter (where v.status = 'devolvida') as devolvidas,
               coalesce(sum(case when v.status = 'devolvida' then v.total end), 0) as total_devolvido
        from vendas v left join usuarios u on u.id = v.created_by where ${where}`,
       params,
@@ -594,7 +594,7 @@ apiRouter.get('/receita-itens', async (req, res) => {
   const receitaId = typeof req.query.receita_id === 'string' ? req.query.receita_id : null
   const [rows] = await pool.query(
     `select i.* from receita_itens i join receitas r on r.id = i.receita_id
-     where r.padaria_id = ? and (? is null or i.receita_id = ?)`,
+     where r.padaria_id = ? and (?::text is null or i.receita_id = ?)`,
     [padariaId(res), receitaId, receitaId],
   )
   res.json(rows)
@@ -773,7 +773,7 @@ apiRouter.get('/conquistas', async (req, res) => {
     pool.query<RowDataPacket[]>(
       `select coalesce(max(t), 0) as recorde from (
          select sum(total) as t from vendas where created_by = ? and created_at < ? and status <> 'devolvida'
-         group by date(created_at)
+         group by created_at::date
        ) dias`,
       [userId, desde],
     ),

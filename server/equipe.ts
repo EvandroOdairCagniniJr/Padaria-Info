@@ -1,7 +1,7 @@
 // Painel do dono: cadastro da equipe e acompanhamento do que cada um fez.
 import { randomUUID } from 'node:crypto'
 import { Router, type Request } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { cargoSchema, exigirPapel, fotoSchema, hashSenha, senhaSchema } from './auth.ts'
 import { pool } from './db.ts'
@@ -32,7 +32,7 @@ equipeRouter.get('/membros', async (_req, res) => {
   const [rows] = await pool.query(
     `select id, nome, email, papel, cargo, ativo, ultimo_acesso, created_at from usuarios
      where padaria_id = ?
-     order by ativo desc, field(papel, 'dono', 'admin', 'funcionario'), nome`,
+     order by ativo desc, array_position(array['dono', 'admin', 'funcionario'], papel), nome`,
     [res.locals.padariaId],
   )
   res.json(rows)
@@ -140,7 +140,7 @@ equipeRouter.get('/resumo', async (req, res) => {
        (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendido_hoje,
        (select coalesce(max(t), 0) from (
           select sum(v.total) as t from vendas v where v.created_by = u.id and v.status <> 'devolvida'
-          group by date(v.created_at)
+          group by v.created_at::date
        ) dias) as recorde_dia,
        (select count(*) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendas,
        (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as total_vendas,
@@ -194,7 +194,7 @@ equipeRouter.get('/atividade', async (req, res) => {
        where pr.padaria_id = ? and pr.status = 'concluido'
      ) a
      left join usuarios u on u.id = a.usuario_id
-     where (? is null or a.usuario_id = ?)
+     where (?::text is null or a.usuario_id = ?)
      order by a.quando desc
      limit ?`,
     [p, p, p, usuarioId, usuarioId, limite],

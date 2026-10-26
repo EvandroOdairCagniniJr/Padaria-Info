@@ -1,7 +1,7 @@
 // Mural da equipe (todos veem): quem trabalha na padaria, ranking de vendas e selos.
 // Novidades (dono e gerência): o que cada um mudou no perfil.
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { exigirPapel } from './auth.ts'
 import { pool } from './db.ts'
 import { lerMetas, metaDaPessoa } from './metas.ts'
@@ -23,7 +23,7 @@ const ultimaPromocao = `
   from historico_perfil h
   where h.usuario_id = u.id and h.alterado_por <> u.id
     and (h.campo = 'cargo' or (h.campo = 'papel' and h.valor_novo = 'admin'))
-    and h.created_at >= now() - interval ${DIAS_SELO} day
+    and h.created_at >= now() - interval '${DIAS_SELO} days'
   order by h.created_at desc, h.campo = 'cargo' desc limit 1`
 
 timeRouter.get('/', async (req, res) => {

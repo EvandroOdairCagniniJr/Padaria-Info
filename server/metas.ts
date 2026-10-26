@@ -1,7 +1,7 @@
 // Metas de vendas: o dono define para a padaria toda (dia, semana, mês), um padrão para cada
 // membro da equipe e, se quiser, metas individuais que valem no lugar do padrão.
 import { Router, type Request } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { exigirPapel, type Usuario } from './auth.ts'
 import { lerConfig, pool } from './db.ts'
@@ -135,7 +135,7 @@ metasRouter.put('/', exigirPapel('dono'), async (req, res) => {
     } else {
       await pool.query(
         `insert into metas (padaria_id, alvo, periodo, valor) values (?, ?, ?, ?)
-         on duplicate key update valor = values(valor)`,
+         on conflict (padaria_id, alvo, periodo) do update set valor = excluded.valor`,
         [padariaId, m.alvo, p, valor],
       )
     }

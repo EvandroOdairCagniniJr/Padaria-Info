@@ -1,5 +1,5 @@
 # Deploy no Render (render.com): New → Blueprint → escolha este repositório.
-# O MySQL fica num serviço externo (ex.: Aiven); preencha as variáveis marcadas com sync: false.
+# O banco é o PostgreSQL do Supabase; preencha as variáveis marcadas com sync: false.
 services:
   - type: web
     name: padaria-info
@@ -16,19 +16,8 @@ services:
         value: 24
       - key: JWT_SECRET
         generateValue: true
-      - key: MYSQL_HOST
-        sync: false
-      - key: MYSQL_PORT
-        sync: false
-      - key: MYSQL_USER
-        sync: false
-      - key: MYSQL_PASSWORD
-        sync: false
-      - key: MYSQL_DATABASE
-        sync: false
-      - key: MYSQL_SSL
-        value: "true"
-      - key: MYSQL_SSL_CA
+      # Connection string do Supabase (Session pooler, porta 5432).
+      - key: DATABASE_URL
         sync: false
       - key: SMTP_HOST
         sync: false

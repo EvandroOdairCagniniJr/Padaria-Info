@@ -2,7 +2,7 @@
 // Ao entregar, o restante é recebido e a encomenda vira uma venda (metas, faturamento, estoque).
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
-import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
+import type { PoolConnection, RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { pool, transaction } from './db.ts'
 import { HttpError, validar } from './http.ts'
@@ -119,8 +119,10 @@ encomendasRouter.post('/', async (req, res) => {
   const padariaId: string = res.locals.padariaId
   const resultado = await transaction(async (conn) => {
     // Número sequencial por padaria (#1, #2...): fácil de falar no balcão e no WhatsApp.
+    // Trava a padaria: duas encomendas ao mesmo tempo não pegam o mesmo número.
+    await conn.query('select id from padarias where id = ? for update', [padariaId])
     const [[ultimo]] = await conn.query<RowDataPacket[]>(
-      'select coalesce(max(numero), 0) as n from encomendas where padaria_id = ? for update',
+      'select coalesce(max(numero), 0) as n from encomendas where padaria_id = ?',
       [padariaId],
     )
     const id = randomUUID()

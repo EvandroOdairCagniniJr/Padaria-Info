@@ -1,6 +1,6 @@
 // Dados de cadastro (pessoas e padaria): validação dos documentos brasileiros e schemas comuns.
 // Documentos e telefones são guardados só com os dígitos; a máscara é coisa da tela.
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { pool } from './db.ts'
 import { HttpError } from './http.ts'
@@ -188,7 +188,7 @@ export async function lerPadaria(padariaId: string): Promise<DadosPadaria | null
   ])
   const dados = rows[0]?.dados
   if (!dados) return null
-  // mysql2 já devolve a coluna JSON como objeto.
+  // O driver já devolve a coluna JSON como objeto.
   return (typeof dados === 'string' ? JSON.parse(dados) : dados) as DadosPadaria
 }
 

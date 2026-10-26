@@ -2,7 +2,7 @@
 // contagem. O "esperado" soma o que entrou no caixa por forma de pagamento.
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
-import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
+import type { PoolConnection, RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { exigirPapel } from './auth.ts'
 import { pool, transaction } from './db.ts'

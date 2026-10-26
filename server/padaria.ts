@@ -1,7 +1,7 @@
 // Dados da padaria (nome, CNPJ, endereço...): cabeçalho do comprovante e página "Minha padaria".
 // Guardados como JSON em padarias.dados.
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { exigirPapel } from './auth.ts'
 import { lerPadaria, padariaSchema, salvarPadaria } from './cadastro.ts'
 import { novoCodigoConvite, pool } from './db.ts'

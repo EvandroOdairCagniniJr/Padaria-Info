@@ -2,7 +2,7 @@
 // As regras de cálculo ficam em src/lib/promocoes.ts (mesmo código no PDV e aqui).
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
-import type { PoolConnection, RowDataPacket } from 'mysql2/promise'
+import type { PoolConnection, RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import type { Promocao } from '../src/lib/promocoes.ts'
 import { exigirPapel } from './auth.ts'

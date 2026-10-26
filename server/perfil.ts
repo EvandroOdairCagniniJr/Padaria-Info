@@ -1,7 +1,7 @@
 // Alterações de perfil (pela própria pessoa ou pelo dono) sempre passam por aqui:
 // grava em usuarios e deixa o rastro em historico_perfil.
 import { randomUUID } from 'node:crypto'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { transaction } from './db.ts'
 import { HttpError } from './http.ts'
 
@@ -42,7 +42,7 @@ export async function alterarPerfil(
     if (!antes) throw new HttpError(404, 'Membro não encontrado')
 
     await conn.query(
-      `update usuarios set ${entradas.map(([k]) => `\`${k}\` = ?`).join(', ')} where id = ?`,
+      `update usuarios set ${entradas.map(([k]) => `"${k}" = ?`).join(', ')} where id = ?`,
       // Endereço e contato de emergência vão como JSON.
       [...entradas.map(([, v]) => (v && typeof v === 'object' ? JSON.stringify(v) : v)), usuarioId],
     )

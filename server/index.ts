@@ -33,8 +33,8 @@ const port = Number(process.env.PORT ?? 3000)
 try {
   await initDatabase()
 } catch (err) {
-  console.error('\nNão foi possível conectar ao MySQL:', (err as Error).message)
-  console.error('Confira se o serviço MySQL80 está rodando e os dados MYSQL_* no arquivo .env.\n')
+  console.error('\nNão foi possível conectar ao banco:', (err as Error).message)
+  console.error('Confira o DATABASE_URL no arquivo .env (connection string do Supabase).\n')
   process.exit(1)
 }
 

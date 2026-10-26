@@ -1,7 +1,7 @@
 // Perdas (sobras, vencidos, queimados...) e sugestão de produção pelo histórico de vendas.
 import { randomUUID } from 'node:crypto'
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { exigirPapel } from './auth.ts'
 import { pool, transaction } from './db.ts'

@@ -13,7 +13,7 @@ claro para a equipe e confiável para quem cuida do negócio.
 ![React](https://img.shields.io/badge/React-19-5a3a22?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-5a3a22?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-Express-5a3a22?logo=nodedotjs&logoColor=white)
-![MySQL](https://img.shields.io/badge/MySQL-8-5a3a22?logo=mysql&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL-Supabase-5a3a22?logo=postgresql&logoColor=white)
 
 [Funcionalidades](#-funcionalidades) ·
 [Perfis de acesso](#-perfis-de-acesso) ·
@@ -83,20 +83,24 @@ data e motivo.
 
 ## 🚀 Como rodar
 
-**Pré-requisitos:** Node.js 22.18+ (roda o TypeScript do servidor direto) e MySQL 8 (no Windows, o serviço `MySQL80`).
+**Pré-requisitos:** Node.js 22.18+ (roda o TypeScript do servidor direto) e um banco PostgreSQL —
+o do [Supabase](https://supabase.com) (plano gratuito) ou o banco local embutido (`npm run banco:local`).
 
 ```bash
 # 1. Instale as dependências
 npm install
 
-# 2. Crie o arquivo de configuração e preencha os dados
+# 2. Crie o arquivo de configuração e preencha o DATABASE_URL
 cp .env.example .env
+
+# (opcional) sem Supabase: banco local embutido, em outro terminal
+npm run banco:local
 
 # 3. Gere o build e suba o servidor
 npm start
 ```
 
-Abra **http://localhost:3000**. O banco `padaria_info` e as tabelas são criados
+Abra **http://localhost:3000**. O schema `padaria` e as tabelas são criados
 automaticamente. Em **Criar conta → Cadastrar minha padaria**, crie a padaria e a conta do
 **dono**; a equipe entra por **Criar conta → Entrar na equipe**, com o código de convite.
 
@@ -107,9 +111,9 @@ outros computadores e celulares da padaria.
 
 | Variável | Para quê |
 |---|---|
-| `MYSQL_HOST`, `MYSQL_PORT`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | Conexão com o MySQL |
+| `DATABASE_URL` | Connection string do PostgreSQL (Supabase: *Connect → Session pooler*) |
 | `JWT_SECRET` | Chave que assina os logins — use um texto longo e aleatório (obrigatória em produção) |
-| `MYSQL_SSL`, `MYSQL_SSL_CA` | Conexão criptografada com MySQL na nuvem |
+| `DATABASE_SSL` | `false` só para o banco local; com o Supabase a conexão é criptografada |
 | `PORT` | Porta do servidor (padrão `3000`) |
 | `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM` | Envio do código de "Esqueci minha senha" |
 
@@ -121,12 +125,16 @@ outros computadores e celulares da padaria.
 
 O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://render.com):
 
-1. Crie um MySQL 8 gerenciado (ex.: [Aiven](https://aiven.io/mysql), que tem plano gratuito) e
-   baixe o certificado CA.
+1. No [Supabase](https://supabase.com), em **Connect → Session pooler**, copie a URI do banco
+   (troque `[YOUR-PASSWORD]` pela senha do banco).
 2. No Render: **New → Blueprint** e escolha este repositório.
-3. Preencha as variáveis pedidas: `MYSQL_*`, `MYSQL_SSL_CA` (conteúdo do certificado) e, para o
-   "Esqueci minha senha", as `SMTP_*`. O `JWT_SECRET` é gerado automaticamente.
-4. Pronto: o Render gera o build, aplica o schema no banco e publica com HTTPS.
+3. Preencha `DATABASE_URL` e, para o "Esqueci minha senha", as `SMTP_*`. O `JWT_SECRET` é
+   gerado automaticamente.
+4. Pronto: o Render gera o build, cria as tabelas no banco e publica com HTTPS.
+
+> As tabelas ficam no schema `padaria`, **fora da API pública** do Supabase, e com RLS ligado:
+> só o servidor do Padaria Info acessa os dados. Tem uma instalação antiga em MySQL?
+> `npm run migrar:mysql` copia tudo para o PostgreSQL.
 
 ## 🔐 Segurança
 
@@ -143,7 +151,7 @@ O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://r
 ## 🧱 Arquitetura
 
 ```
-Navegador (React)  ──/api──▶  Servidor Node/Express  ──▶  MySQL 8
+Navegador (React)  ──/api──▶  Servidor Node/Express  ──▶  PostgreSQL (Supabase)
        ▲                          │
        └──── site (dist/) ────────┘   mesmo endereço e porta
 ```
@@ -151,8 +159,8 @@ Navegador (React)  ──/api──▶  Servidor Node/Express  ──▶  MySQL 
 | Camada | Tecnologias |
 |---|---|
 | Interface | React 19, TypeScript, Vite, Tailwind CSS 4, shadcn/ui, TanStack Query, React Hook Form + Zod |
-| Servidor | Node.js, Express 5, mysql2, JWT, bcrypt, Nodemailer |
-| Banco | MySQL 8 — schema idempotente aplicado na inicialização (`server/schema.sql`) |
+| Servidor | Node.js, Express 5, node-postgres, JWT, bcrypt, Nodemailer |
+| Banco | PostgreSQL (Supabase) — schema idempotente aplicado na inicialização (`server/schema.sql`) |
 
 Cada tabela de negócio carrega o `padaria_id`, e toda consulta do servidor filtra pela padaria
 de quem está logado — uma padaria nunca lê nem altera dados de outra. Rotas públicas de login,

@@ -1,7 +1,7 @@
 // Análise de vendas por período (dia, semana, mês): mais vendidos, comparação com o período
 // anterior, vendas por hora/dia, categorias, produtos comprados juntos e recomendações de venda.
 import { Router } from 'express'
-import type { RowDataPacket } from 'mysql2/promise'
+import type { RowDataPacket } from './db.ts'
 import { z } from 'zod'
 import { exigirPapel } from './auth.ts'
 import { pool } from './db.ts'
@@ -116,11 +116,11 @@ analiseRouter.get('/', async (req, res) => {
   const offset = q.tz * 60
   const [tempo] = await pool.query<RowDataPacket[]>(
     q.periodo === 'dia'
-      ? `select floor(mod(unix_timestamp(created_at) - ?, 86400) / 3600) as chave,
+      ? `select floor(mod((extract(epoch from created_at) - ?)::numeric, 86400) / 3600) as chave,
                 count(*) as vendas, sum(total) as faturamento
          from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
          group by chave order by chave`
-      : `select floor((unix_timestamp(created_at) - ?) / 86400) as chave,
+      : `select floor((extract(epoch from created_at) - ?) / 86400) as chave,
                 count(*) as vendas, sum(total) as faturamento
          from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
          group by chave order by chave`,
@@ -159,7 +159,7 @@ analiseRouter.get('/', async (req, res) => {
      join produtos pb on pb.id = b.produto_id
      where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
      group by a.produto_id, b.produto_id, pa.nome, pb.nome
-     having vezes >= 2
+     having count(*) >= 2
      order by vezes desc limit 5`,
     [padariaId, de, ate],
   )
