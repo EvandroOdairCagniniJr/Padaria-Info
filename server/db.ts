@@ -53,6 +53,8 @@ const colunasNovas: [string, string, string][] = [
   ['usuarios', 'observacoes', 'observacoes text null'],
   ['produtos', 'emoji', 'emoji varchar(16)'],
   ['produtos', 'foto', 'foto mediumtext'],
+  // Variedades: produtos com o mesmo grupo (ex.: "Café") viram um card só no PDV.
+  ['produtos', 'grupo', 'grupo varchar(80) null'],
   // Quanto o cliente entregou em dinheiro (para o troco na 2ª via do comprovante).
   ['vendas', 'valor_recebido', 'valor_recebido decimal(10, 2) null after forma_pagamento'],
   // Devolução: a venda continua no histórico, mas sai dos totais e o estoque volta.

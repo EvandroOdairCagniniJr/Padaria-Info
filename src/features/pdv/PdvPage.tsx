@@ -24,7 +24,13 @@ import { useAuth } from '@/features/auth/AuthContext'
 import { useCaixaAtual } from '@/features/caixa/api'
 import { useFinalizarVenda } from '@/features/pdv/api'
 import { usePromocoesAtivas } from '@/features/promocoes/api'
-import { aplicarPromocoes, descreverPromocao, promocaoAlcanca, promocaoVigente } from '@/lib/promocoes'
+import {
+  aplicarPromocoes,
+  descreverPromocao,
+  promocaoAlcanca,
+  promocaoVigente,
+  type Promocao,
+} from '@/lib/promocoes'
 import { lojaDoComprovante, usePadaria } from '@/features/padaria/api'
 import { ComprovanteDialog } from '@/features/pdv/ComprovanteDialog'
 import type { Comprovante } from '@/features/pdv/comprovante'
@@ -119,6 +125,55 @@ export function PdvPage() {
         (!term || p.nome.toLowerCase().includes(term)),
     )
   }, [produtos, search, categoria])
+
+  // Vitrine: produtos com a mesma "variedade de" (grupo) viram um card só; o toque abre as opções.
+  const [grupoAberto, setGrupoAberto] = useState<string | null>(null)
+  const vitrine = (() => {
+    const porGrupo = new Map<string, Produto[]>()
+    for (const p of produtosFiltrados) {
+      const g = p.grupo?.trim()
+      if (g) porGrupo.set(g, [...(porGrupo.get(g) ?? []), p])
+    }
+    const vistos = new Set<string>()
+    const itens: (
+      | { tipo: 'produto'; produto: Produto }
+      | { tipo: 'grupo'; grupo: string; variedades: Produto[]; min: number; max: number; noCarrinho: number; temPromo: boolean }
+    )[] = []
+    for (const p of produtosFiltrados) {
+      const g = p.grupo?.trim()
+      const variedades = g ? porGrupo.get(g)! : []
+      // Grupo com uma variedade só (ou filtrado até sobrar uma) aparece como produto normal.
+      if (!g || variedades.length < 2) {
+        itens.push({ tipo: 'produto', produto: p })
+        continue
+      }
+      if (vistos.has(g)) continue
+      vistos.add(g)
+      const precos = variedades.map((v) => v.preco_venda)
+      itens.push({
+        tipo: 'grupo',
+        grupo: g,
+        variedades,
+        min: Math.min(...precos),
+        max: Math.max(...precos),
+        noCarrinho: variedades.reduce((s, v) => s + (cart.find((l) => l.produto.id === v.id)?.quantidade ?? 0), 0),
+        temPromo: variedades.some((v) => Boolean(promoDo(v))),
+      })
+    }
+    return itens
+  })()
+
+  function promoDo(produto: Produto) {
+    return vigentes.find((p) =>
+      promocaoAlcanca(p, {
+        produto_id: produto.id,
+        categoria: produto.categoria,
+        unidade: produto.unidade,
+        quantidade: 1,
+        preco: produto.preco_venda,
+      }),
+    )
+  }
 
   // O pedido guarda o produto de quando foi adicionado; preço e estoque vêm sempre do cadastro
   // atual (que se atualiza sozinho), assim o total na tela é o mesmo que o servidor cobra.
@@ -386,57 +441,48 @@ export function PdvPage() {
             </div>
           ) : (
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
-              {produtosFiltrados.map((produto) => {
-                const noCarrinho = qtdNoCarrinho.get(produto.id)
-                const promo = vigentes.find((p) =>
-                  promocaoAlcanca(p, {
-                    produto_id: produto.id,
-                    categoria: produto.categoria,
-                    unidade: produto.unidade,
-                    quantidade: 1,
-                    preco: produto.preco_venda,
-                  }),
-                )
-                return (
+              {vitrine.map((item) =>
+                item.tipo === 'produto' ? (
+                  <CartaoProduto
+                    key={item.produto.id}
+                    produto={item.produto}
+                    noCarrinho={qtdNoCarrinho.get(item.produto.id)}
+                    promo={promoDo(item.produto)}
+                    onClick={() => addToCart(item.produto)}
+                  />
+                ) : (
                   <button
-                    key={produto.id}
+                    key={`grupo:${item.grupo}`}
                     type="button"
-                    onClick={() => addToCart(produto)}
+                    onClick={() => setGrupoAberto(item.grupo)}
                     className={cn(
                       'relative flex flex-col items-start gap-2 rounded-xl border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md active:translate-y-0',
-                      noCarrinho && 'border-primary ring-1 ring-primary/30',
+                      item.noCarrinho > 0 && 'border-primary ring-1 ring-primary/30',
                     )}
                   >
-                    {noCarrinho && (
+                    {item.noCarrinho > 0 && (
                       <span className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
-                        {formatQuantidade(noCarrinho)}
+                        {formatQuantidade(item.noCarrinho)}
                       </span>
                     )}
-                    {promo && (
+                    {item.temPromo && (
                       <span className="absolute top-2 left-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
-                        {descreverPromocao(promo)}
+                        promo
                       </span>
                     )}
-                    <IconeProduto produto={produto} tamanho="lg" />
-                    <span className="line-clamp-2 text-sm leading-snug font-medium">
-                      {produto.nome}
-                    </span>
+                    <IconeProduto produto={item.variedades[0]} tamanho="lg" />
+                    <span className="line-clamp-2 text-sm leading-snug font-medium">{item.grupo}</span>
                     <div className="mt-auto flex w-full items-baseline justify-between gap-1">
                       <span className="font-semibold text-primary">
-                        {formatBRL(produto.preco_venda)}
+                        {item.min === item.max ? formatBRL(item.min) : `a partir de ${formatBRL(item.min)}`}
                       </span>
-                      <span
-                        className={cn(
-                          'text-xs',
-                          produto.estoque_atual <= 0 ? 'text-destructive' : 'text-muted-foreground',
-                        )}
-                      >
-                        {formatQuantidade(produto.estoque_atual)} {produto.unidade}
+                      <span className="rounded-full bg-primary/10 px-2 text-[11px] font-medium text-primary">
+                        {item.variedades.length} opções
                       </span>
                     </div>
                   </button>
-                )
-              })}
+                ),
+              )}
 
               {produtosFiltrados.length === 0 && (
                 <p className="col-span-full py-8 text-center text-sm text-muted-foreground">
@@ -475,6 +521,30 @@ export function PdvPage() {
         <DialogContent className="flex h-[90svh] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
           <DialogTitle className="sr-only">Pedido</DialogTitle>
           {painel}
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={grupoAberto !== null} onOpenChange={(o) => !o && setGrupoAberto(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogTitle>{grupoAberto}</DialogTitle>
+          <p className="-mt-2 text-sm text-muted-foreground">Escolha a variedade — toque mais de uma vez para somar.</p>
+          <div className="grid max-h-[60svh] grid-cols-2 gap-3 overflow-y-auto p-1 sm:grid-cols-3">
+            {(produtos ?? [])
+              .filter((p) => p.grupo?.trim() === grupoAberto)
+              .map((p, i) => (
+                <div key={p.id} className="tela-entra" style={{ animationDelay: `${i * 40}ms` }}>
+                  <CartaoProduto
+                    produto={p}
+                    noCarrinho={qtdNoCarrinho.get(p.id)}
+                    promo={promoDo(p)}
+                    onClick={() => addToCart(p)}
+                  />
+                </div>
+              ))}
+          </div>
+          <Button className="w-full" onClick={() => setGrupoAberto(null)}>
+            Pronto
+          </Button>
         </DialogContent>
       </Dialog>
 
@@ -855,5 +925,52 @@ function LinhaPedido({
         </Button>
       </div>
     </div>
+  )
+}
+
+function CartaoProduto({
+  produto,
+  noCarrinho,
+  promo,
+  onClick,
+}: {
+  produto: Produto
+  noCarrinho?: number
+  promo?: Promocao
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        'relative flex h-full w-full flex-col items-start gap-2 rounded-xl border bg-card p-3 text-left transition-all hover:-translate-y-0.5 hover:border-primary/60 hover:shadow-md active:translate-y-0',
+        noCarrinho && 'border-primary ring-1 ring-primary/30',
+      )}
+    >
+      {noCarrinho ? (
+        <span
+          key={noCarrinho}
+          className="total-pulso absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+        >
+          {formatQuantidade(noCarrinho)}
+        </span>
+      ) : null}
+      {promo && (
+        <span className="absolute top-2 left-2 rounded-full bg-emerald-500 px-2 py-0.5 text-[10px] font-bold text-white shadow-sm">
+          {descreverPromocao(promo)}
+        </span>
+      )}
+      <IconeProduto produto={produto} tamanho="lg" />
+      <span className="line-clamp-2 text-sm leading-snug font-medium">{produto.nome}</span>
+      <div className="mt-auto flex w-full items-baseline justify-between gap-1">
+        <span className="font-semibold text-primary">{formatBRL(produto.preco_venda)}</span>
+        <span
+          className={cn('text-xs', produto.estoque_atual <= 0 ? 'text-destructive' : 'text-muted-foreground')}
+        >
+          {formatQuantidade(produto.estoque_atual)} {produto.unidade}
+        </span>
+      </div>
+    </button>
   )
 }

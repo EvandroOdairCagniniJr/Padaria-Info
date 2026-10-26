@@ -46,6 +46,7 @@ import { mensagemErro } from '@/lib/format'
 const produtoSchema = z.object({
   nome: z.string().min(1, 'Informe o nome do produto'),
   categoria: z.string().optional(),
+  grupo: z.string().optional(),
   unidade: z.string().min(1, 'Selecione a unidade'),
   preco_venda: z.coerce.number().positive('Informe um preço de venda válido'),
   // Campo vazio vira null (sem custo informado) em vez de 0.
@@ -102,6 +103,7 @@ export function ProdutoFormDialog({ open, onOpenChange, produto }: ProdutoFormDi
           ? {
               nome: produto.nome,
               categoria: produto.categoria ?? '',
+              grupo: produto.grupo ?? '',
               unidade: produto.unidade,
               preco_venda: produto.preco_venda,
               preco_custo: produto.preco_custo ?? undefined,
@@ -112,6 +114,10 @@ export function ProdutoFormDialog({ open, onOpenChange, produto }: ProdutoFormDi
     }
   }, [open, produto, reset])
 
+  const grupos = useMemo(
+    () => [...new Set((produtos ?? []).map((p) => p.grupo?.trim()).filter(Boolean) as string[])].sort(),
+    [produtos],
+  )
   const sugerida = categoriaSugerida(watch('nome') ?? '')
   const categoria = categoriaAuto ? (sugerida ?? '') : (watch('categoria') ?? '')
 
@@ -153,7 +159,7 @@ export function ProdutoFormDialog({ open, onOpenChange, produto }: ProdutoFormDi
   }
 
   async function onSubmit(form: ProdutoForm) {
-    const values = { ...form, categoria: categoria.trim() }
+    const values = { ...form, categoria: categoria.trim(), grupo: form.grupo?.trim() || null }
     try {
       if (isEditing && produto) {
         await updateProduto.mutateAsync({ id: produto.id, changes: values })
@@ -296,6 +302,25 @@ export function ProdutoFormDialog({ open, onOpenChange, produto }: ProdutoFormDi
                 </div>
               </div>
             )}
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="grupo">Variedade de (opcional)</Label>
+            <Input
+              id="grupo"
+              list="grupos-existentes"
+              autoComplete="off"
+              placeholder='Ex.: "Café" — para Coado, Cappuccino, Chocolatado...'
+              {...register('grupo')}
+            />
+            <datalist id="grupos-existentes">
+              {grupos.map((g) => (
+                <option key={g} value={g} />
+              ))}
+            </datalist>
+            <p className="text-xs text-muted-foreground">
+              Produtos com a mesma variedade aparecem juntos no PDV: um toque abre as opções.
+            </p>
           </div>
 
           <div className="grid grid-cols-2 gap-4">

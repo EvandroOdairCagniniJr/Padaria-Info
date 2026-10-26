@@ -66,6 +66,8 @@ async function atualizar(
 const produtoSchema = z.object({
   nome: z.string().trim().min(1, 'Informe o nome do produto'),
   categoria: textoOpcional,
+  // Variedade de: agrupa produtos parecidos (Café → Coado, Cappuccino, Chocolatado).
+  grupo: textoOpcional,
   unidade: z.string().min(1, 'Selecione a unidade'),
   preco_venda: z.number().nonnegative('Preço de venda inválido'),
   preco_custo: z.number().nonnegative('Preço de custo inválido').nullish(),
@@ -85,14 +87,15 @@ apiRouter.post('/produtos', gestao, async (req, res) => {
   const p = validar(produtoSchema, req.body)
   const id = randomUUID()
   await pool.query(
-    `insert into produtos (id, padaria_id, nome, categoria, unidade, preco_venda, preco_custo,
+    `insert into produtos (id, padaria_id, nome, categoria, grupo, unidade, preco_venda, preco_custo,
        estoque_atual, estoque_minimo)
-     values (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+     values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       id,
       padariaId(res),
       p.nome,
       p.categoria,
+      p.grupo,
       p.unidade,
       p.preco_venda,
       p.preco_custo ?? null,

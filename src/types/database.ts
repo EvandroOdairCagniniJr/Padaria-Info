@@ -10,6 +10,8 @@ export type Produto = {
   id: string
   nome: string
   categoria: string | null
+  // Variedade de (ex.: "Café"): produtos do mesmo grupo viram um card só no PDV.
+  grupo?: string | null
   unidade: string
   preco_venda: number
   preco_custo: number | null
@@ -22,6 +24,7 @@ export type Produto = {
 export type ProdutoInsert = {
   nome: string
   categoria?: string | null
+  grupo?: string | null
   unidade: string
   preco_venda: number
   preco_custo?: number | null
