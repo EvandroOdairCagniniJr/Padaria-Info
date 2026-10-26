@@ -12,6 +12,7 @@ import type { RowDataPacket } from 'mysql2'
 import { z } from 'zod'
 import { novoCodigoConvite, pool } from './db.ts'
 import { HttpError, limitarTentativas, validar } from './http.ts'
+import { registrarAcesso } from './seguranca.ts'
 import {
   dadosPessoaisSchema,
   garantirCpfUnico,
@@ -46,7 +47,12 @@ export interface Usuario {
   foto: string | null
 }
 
-export const senhaSchema = z.string().min(6, 'A senha precisa ter pelo menos 6 caracteres')
+// Senha nova: 8+ caracteres, com letras e números (as já existentes continuam valendo).
+export const senhaSchema = z
+  .string()
+  .min(8, 'A senha precisa ter pelo menos 8 caracteres, com letras e números')
+  .max(128, 'Senha muito longa')
+  .refine((s) => /[a-zA-Z]/.test(s) && /\d/.test(s), 'A senha precisa ter letras e números')
 
 // Foto já reduzida pelo navegador (src/lib/imagem.ts); ~30 KB, limite folgado de 400 KB.
 export const fotoSchema = z
@@ -63,8 +69,20 @@ export function hashSenha(senha: string) {
   return bcrypt.hash(senha, 10)
 }
 
-function iniciarSessao(res: Response, usuario: Usuario) {
-  const token = jwt.sign({ sub: usuario.id }, jwtSecret, { expiresIn: '7d' })
+// Bloqueio depois de muitas senhas erradas seguidas na mesma conta.
+const MAX_FALHAS = 5
+const BLOQUEIO_MIN = 15
+// Hash qualquer: conta inexistente leva o mesmo tempo que senha errada (não revela e-mails).
+const HASH_FALSO = bcrypt.hashSync('senha-que-nao-existe', 10)
+
+async function iniciarSessao(res: Response, usuario: Usuario) {
+  // A versão da sessão vai no token: trocar a senha ou desativar invalida os tokens antigos.
+  const [rows] = await pool.query<RowDataPacket[]>('select sessao_versao from usuarios where id = ?', [
+    usuario.id,
+  ])
+  const token = jwt.sign({ sub: usuario.id, v: Number(rows[0]?.sessao_versao ?? 0) }, jwtSecret, {
+    expiresIn: '7d',
+  })
   // Em produção (HTTPS) o cookie só trafega criptografado.
   res.cookie(COOKIE, token, {
     httpOnly: true,
@@ -75,12 +93,21 @@ function iniciarSessao(res: Response, usuario: Usuario) {
   res.json(usuario)
 }
 
-async function buscarUsuarioAtivo(id: string): Promise<Usuario | null> {
+async function buscarUsuarioAtivo(id: string, versao?: number): Promise<Usuario | null> {
   const [rows] = await pool.query<RowDataPacket[]>(
-    `select ${colunasUsuario} from usuarios where id = ? and ativo = true`,
+    `select ${colunasUsuario}, sessao_versao from usuarios where id = ? and ativo = true`,
     [id],
   )
-  return (rows[0] as Usuario | undefined) ?? null
+  const u = rows[0]
+  if (!u) return null
+  if (versao !== undefined && Number(u.sessao_versao) !== versao) return null
+  const { sessao_versao: _v, ...usuario } = u
+  return usuario as Usuario
+}
+
+// Derruba todos os logins da pessoa (troca de senha, "sair de todos os aparelhos").
+export async function encerrarSessoes(usuarioId: string) {
+  await pool.query('update usuarios set sessao_versao = sessao_versao + 1 where id = ?', [usuarioId])
 }
 
 async function emailEmUso(email: string) {
@@ -103,14 +130,36 @@ authRouter.post('/login', async (req, res) => {
     }),
     req.body,
   )
+  const emailLimpo = email.trim().toLowerCase()
   const [rows] = await pool.query<RowDataPacket[]>(
-    `select ${colunasUsuario}, ativo, ultimo_acesso, senha_hash from usuarios where email = ?`,
-    [email.trim().toLowerCase()],
+    `select ${colunasUsuario}, ativo, ultimo_acesso, senha_hash, falhas_login,
+            greatest(timestampdiff(second, now(), bloqueado_ate), 0) as bloqueio_restante
+     from usuarios where email = ?`,
+    [emailLimpo],
   )
   const u = rows[0]
-  if (!u || !(await bcrypt.compare(senha, u.senha_hash))) {
+  if (u && Number(u.bloqueio_restante) > 0) {
+    await registrarAcesso(req, 'conta_bloqueada', { padariaId: u.padaria_id, usuarioId: u.id, email: emailLimpo })
+    throw new HttpError(
+      423,
+      `Conta bloqueada por segurança após várias senhas erradas. Tente de novo em ${Math.ceil(Number(u.bloqueio_restante) / 60)} min ou use "Esqueci minha senha".`,
+    )
+  }
+  const senhaCerta = await bcrypt.compare(senha.slice(0, 128), u?.senha_hash ?? HASH_FALSO)
+  if (!u || !senhaCerta) {
+    if (u) {
+      const falhas = Number(u.falhas_login) + 1
+      await pool.query(
+        falhas >= MAX_FALHAS
+          ? `update usuarios set falhas_login = 0, bloqueado_ate = now() + interval ${BLOQUEIO_MIN} minute where id = ?`
+          : 'update usuarios set falhas_login = falhas_login + 1 where id = ?',
+        [u.id],
+      )
+    }
+    await registrarAcesso(req, 'login_falhou', { padariaId: u?.padaria_id, usuarioId: u?.id, email: emailLimpo })
     throw new HttpError(401, 'E-mail ou senha inválidos')
   }
+  await pool.query('update usuarios set falhas_login = 0, bloqueado_ate = null where id = ?', [u.id])
   // Só depois da senha certa: não revela o perfil de contas alheias.
   if (perfil === 'dono' && u.papel !== 'dono') {
     throw new HttpError(403, 'Esta conta é da equipe da padaria. Escolha "Sou da equipe" para entrar.')
@@ -119,6 +168,7 @@ authRouter.post('/login', async (req, res) => {
     throw new HttpError(403, 'Esta conta é do dono da padaria. Escolha "Sou dono(a)" para entrar.')
   }
   garantirAtivo(u)
+  await registrarAcesso(req, 'login', { padariaId: u.padaria_id, usuarioId: u.id, email: emailLimpo })
   await entrar(res, u)
 })
 
@@ -136,7 +186,7 @@ function garantirAtivo(u: RowDataPacket) {
 
 async function entrar(res: Response, u: RowDataPacket) {
   await pool.query('update usuarios set ultimo_acesso = now() where id = ?', [u.id])
-  iniciarSessao(res, {
+  await iniciarSessao(res, {
     id: u.id,
     padaria_id: u.padaria_id,
     nome: u.nome,
@@ -227,6 +277,7 @@ authRouter.post('/esqueci-senha', async (req, res) => {
       const padaria = (await lerPadaria(u.padaria_id))?.nome_fantasia || 'Padaria Info'
       try {
         await enviarCodigoSenha(u.email, u.nome, codigo, padaria)
+        await registrarAcesso(req, 'codigo_enviado', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
       } catch (err) {
         console.error('Falha ao enviar o e-mail de recuperação:', err)
         await pool.query('delete from codigos_senha where usuario_id = ?', [u.id])
@@ -274,13 +325,28 @@ authRouter.post('/codigo/entrar', async (req, res) => {
   )
   const u = await conferirCodigo(email, codigo)
   await pool.query('delete from codigos_senha where usuario_id = ?', [u.id])
+  // Quem provou ser dono do e-mail destrava a conta.
+  await pool.query('update usuarios set falhas_login = 0, bloqueado_ate = null where id = ?', [u.id])
   if (novaSenha) {
     await pool.query('update usuarios set senha_hash = ? where id = ?', [await hashSenha(novaSenha), u.id])
+    // Senha nova: derruba logins antigos em outros aparelhos (este recebe um novo em seguida).
+    await encerrarSessoes(u.id)
+    await registrarAcesso(req, 'senha_alterada', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
   }
+  await registrarAcesso(req, 'entrou_com_codigo', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
   await entrar(res, u)
 })
 
 authRouter.post('/logout', (_req, res) => {
+  res.clearCookie(COOKIE)
+  res.status(204).end()
+})
+
+// Sair de todos os aparelhos (ex.: esqueceu o sistema aberto num computador da padaria).
+authRouter.post('/sair-de-todos', exigirLogin, async (req, res) => {
+  const u = res.locals.usuario as Usuario
+  await encerrarSessoes(u.id)
+  await registrarAcesso(req, 'saiu_de_todos', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
   res.clearCookie(COOKIE)
   res.status(204).end()
 })
@@ -337,7 +403,7 @@ authRouter.post('/setup', async (req, res) => {
       dados.endereco ? JSON.stringify(dados.endereco) : null,
     ],
   )
-  iniciarSessao(res, usuario)
+  await iniciarSessao(res, usuario)
 })
 
 export const cargoSchema = z.string().trim().max(60, 'Cargo muito longo')
@@ -376,12 +442,17 @@ authRouter.get('/perfil', exigirLogin, async (_req, res) => {
 export async function exigirLogin(req: Request, res: Response, next: NextFunction) {
   const token = req.cookies?.[COOKIE]
   let id: string | null = null
+  let versao = 0
   try {
-    if (token) id = (jwt.verify(token, jwtSecret) as { sub: string }).sub
+    if (token) {
+      const dados = jwt.verify(token, jwtSecret, { algorithms: ['HS256'] }) as { sub: string; v?: number }
+      id = dados.sub
+      versao = dados.v ?? 0
+    }
   } catch {
     id = null
   }
-  const usuario = id ? await buscarUsuarioAtivo(id) : null
+  const usuario = id ? await buscarUsuarioAtivo(id, versao) : null
   if (!usuario) {
     res.status(401).json({ message: 'Sua sessão expirou. Entre novamente.' })
     return

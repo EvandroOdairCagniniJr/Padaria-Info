@@ -25,6 +25,7 @@ const { recomendacoesRouter } = await import('./recomendacoes.ts')
 const { analiseRouter } = await import('./analise.ts')
 const { promocoesRouter } = await import('./promocoes.ts')
 const { errorHandler } = await import('./http.ts')
+const { cabecalhosSeguranca, limiteGeral, mesmaOrigem } = await import('./seguranca.ts')
 const { assetsComprimidos } = await import('./estaticos.ts')
 
 const port = Number(process.env.PORT ?? 3000)
@@ -40,6 +41,9 @@ try {
 const app = express()
 // Atrás do proxy do Render (HTTPS): IP real do cliente e cookie seguro.
 app.set('trust proxy', 1)
+// Não anuncia que o servidor é Express.
+app.disable('x-powered-by')
+app.use(cabecalhosSeguranca)
 app.use(compression())
 // Limite maior por causa das fotos da equipe (já reduzidas no navegador).
 app.use(express.json({ limit: '1mb' }))
@@ -49,6 +53,7 @@ app.use(cookieParser())
 app.get('/api/saude', (_req, res) => {
   res.json({ ok: true })
 })
+app.use('/api', limiteGeral, mesmaOrigem)
 app.use('/api/auth', authRouter)
 app.use('/api/equipe', exigirLogin, equipeRouter)
 app.use('/api/time', exigirLogin, timeRouter)

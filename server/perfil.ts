@@ -47,6 +47,11 @@ export async function alterarPerfil(
       [...entradas.map(([, v]) => (v && typeof v === 'object' ? JSON.stringify(v) : v)), usuarioId],
     )
 
+    // Senha nova ou acesso desativado: os logins abertos dessa pessoa deixam de valer.
+    if (mudancas.senha_hash !== undefined || mudancas.ativo === false) {
+      await conn.query('update usuarios set sessao_versao = sessao_versao + 1 where id = ?', [usuarioId])
+    }
+
     for (const campo of camposRastreados) {
       const novo = mudancas[campo]
       if (novo === undefined || novo === antes[campo]) continue

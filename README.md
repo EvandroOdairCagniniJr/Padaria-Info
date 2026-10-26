@@ -128,6 +128,18 @@ O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://r
    "Esqueci minha senha", as `SMTP_*`. O `JWT_SECRET` é gerado automaticamente.
 4. Pronto: o Render gera o build, aplica o schema no banco e publica com HTTPS.
 
+## 🔐 Segurança
+
+- **Senhas** com hash bcrypt; senhas novas com 8+ caracteres, letras e números.
+- **Bloqueio de conta** por 15 minutos após 5 senhas erradas seguidas; o código por e-mail destrava.
+- **Sessão** em cookie httpOnly e seguro (HTTPS); trocar a senha ou desativar o acesso derruba
+  os logins abertos em outros aparelhos. Botão **Sair de todos os aparelhos** no perfil.
+- **Cabeçalhos de proteção**: Content-Security-Policy, HSTS, anti-clickjacking, nosniff.
+- **CSRF**: ações só são aceitas vindas do próprio site.
+- **Limite de requisições** por IP (geral e nas rotas de login e recuperação).
+- **Isolamento por padaria** em todas as consultas e **registro de acessos** visível ao dono.
+- Recuperação de senha que **não revela** quais e-mails estão cadastrados.
+
 ## 🧱 Arquitetura
 
 ```
@@ -174,6 +186,10 @@ Cada versão é publicada em [**Releases**](https://github.com/EvandroOdairCagni
 com o que mudou e o que é preciso configurar.
 
 ---
+
+## 📄 Licença
+
+Software proprietário — todos os direitos reservados. Veja [LICENSE](LICENSE).
 
 <div align="center">
 <sub>Feito com carinho para quem acorda antes do sol. 🥐</sub>

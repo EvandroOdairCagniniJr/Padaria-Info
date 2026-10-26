@@ -48,6 +48,7 @@ import {
 } from '@/lib/documentos'
 import { hojeISO, mensagemErro } from '@/lib/format'
 import type { ResumoMembro, Turno } from '@/types/database'
+import { REGRA_SENHA, erroSenha } from '@/lib/senha'
 
 const papeisEquipe = [
   { value: 'funcionario', label: 'Funcionário — balcão, estoque e produção' },
@@ -107,7 +108,8 @@ function validar(f: Formulario, criando: boolean): Erros {
   const erros: Erros = {}
   if (!f.nome.trim()) erros.nome = 'Informe o nome completo'
   if (criando && !/^\S+@\S+\.\S+$/.test(f.email.trim())) erros.email = 'Informe um e-mail válido'
-  if ((criando || f.senha) && f.senha.length < 6) erros.senha = 'Mínimo de 6 caracteres'
+  const erroDaSenha = criando || f.senha ? erroSenha(f.senha) : null
+  if (erroDaSenha) erros.senha = erroDaSenha
   if (f.cpf && !cpfValido(f.cpf)) erros.cpf = 'CPF inválido'
   if (f.telefone && !telefoneValido(f.telefone)) erros.telefone = 'Use DDD + número'
   if (f.data_nascimento && f.data_nascimento > hojeISO()) erros.data_nascimento = 'Data no futuro'
@@ -292,7 +294,7 @@ export function MembroFormDialog({ open, onOpenChange, membro }: MembroFormDialo
                 obrigatorio={criando}
                 col={3}
                 erro={erros.senha}
-                dica={criando ? 'Mínimo de 6 caracteres' : 'Deixe em branco para manter a atual'}
+                dica={criando ? REGRA_SENHA : 'Deixe em branco para manter a atual'}
               >
                 {(id) => (
                   <Input

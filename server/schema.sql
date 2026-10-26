@@ -316,3 +316,17 @@ create table if not exists promocoes (
   created_at timestamp not null default current_timestamp,
   index promocoes_padaria_idx (padaria_id)
 );
+
+-- Registro de acessos: logins (certos e errados), bloqueios, códigos de recuperação e trocas
+-- de senha, com IP e navegador. O dono vê os da padaria em Equipe.
+create table if not exists log_acessos (
+  id char(36) primary key,
+  padaria_id char(36) null,
+  usuario_id char(36) null,
+  email varchar(255) null,
+  evento varchar(30) not null,
+  ip varchar(64) null,
+  navegador varchar(255) null,
+  created_at timestamp not null default current_timestamp,
+  index log_acessos_padaria_idx (padaria_id, created_at)
+);

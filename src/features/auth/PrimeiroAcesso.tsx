@@ -16,6 +16,7 @@ import {
 import { cpfValido, digitos, mascaraCPF, mascaraTelefone, telefoneValido } from '@/lib/documentos'
 import { hojeISO } from '@/lib/format'
 import { cn } from '@/lib/utils'
+import { REGRA_SENHA, erroSenha } from '@/lib/senha'
 
 interface Dono {
   nome: string
@@ -33,7 +34,8 @@ function validarDono(d: Dono): ErrosDono {
   const e: ErrosDono = {}
   if (!d.nome.trim()) e.nome = 'Informe seu nome completo'
   if (!/^\S+@\S+\.\S+$/.test(d.email.trim())) e.email = 'Informe um e-mail válido'
-  if (d.senha.length < 6) e.senha = 'Mínimo de 6 caracteres'
+  const erro = erroSenha(d.senha)
+  if (erro) e.senha = erro
   if (d.confirmacao !== d.senha) e.confirmacao = 'As senhas não conferem'
   if (d.telefone && !telefoneValido(d.telefone)) e.telefone = 'Use DDD + número'
   if (d.cpf && !cpfValido(d.cpf)) e.cpf = 'CPF inválido'
@@ -238,7 +240,7 @@ export function PrimeiroAcesso({ onVoltar }: { onVoltar?: () => void }) {
                     obrigatorio
                     col={3}
                     erro={errosDono.senha}
-                    dica="Mínimo de 6 caracteres"
+                    dica={REGRA_SENHA}
                   >
                     {(id) => (
                       <Input

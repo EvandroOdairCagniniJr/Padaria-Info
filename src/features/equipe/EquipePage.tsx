@@ -33,6 +33,7 @@ import {
 import { useAuth } from '@/features/auth/AuthContext'
 import { PerfilDialog } from '@/features/auth/PerfilDialog'
 import { useAlterarMembro, useAtividadeEquipe, useResumoEquipe } from '@/features/equipe/api'
+import { AcessosRecentes } from '@/features/equipe/AcessosRecentes'
 import { ConviteEquipe } from '@/features/equipe/ConviteEquipe'
 import { MembroFormDialog } from '@/features/equipe/MembroFormDialog'
 import { MuralEquipe } from '@/features/equipe/MuralEquipe'
@@ -144,6 +145,7 @@ export function EquipePage() {
       {ehGestao(user?.papel) && <NovidadesEquipe />}
 
       {ehDono && <PainelDono desde={desde} hoje={hoje} onEditar={abrirMembro} />}
+      {ehDono && <AcessosRecentes />}
 
       <MembroFormDialog open={dialogOpen} onOpenChange={setDialogOpen} membro={editing} />
       <PerfilDialog open={perfilAberto} onOpenChange={setPerfilAberto} />

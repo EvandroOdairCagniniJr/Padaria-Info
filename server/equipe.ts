@@ -201,3 +201,14 @@ equipeRouter.get('/atividade', async (req, res) => {
   )
   res.json(rows)
 })
+
+// Acessos recentes da padaria: logins, senhas erradas, bloqueios, recuperação e troca de senha.
+equipeRouter.get('/acessos', async (_req, res) => {
+  const [rows] = await pool.query(
+    `select l.id, l.evento, l.email, l.ip, l.navegador, l.created_at, u.nome
+     from log_acessos l left join usuarios u on u.id = l.usuario_id
+     where l.padaria_id = ? order by l.created_at desc limit 60`,
+    [res.locals.padariaId],
+  )
+  res.json(rows)
+})

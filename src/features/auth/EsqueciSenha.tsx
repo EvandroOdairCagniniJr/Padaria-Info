@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { useAuth } from '@/features/auth/AuthContext'
 import { api } from '@/lib/api'
+import { REGRA_SENHA, erroSenha } from '@/lib/senha'
 
 type Etapa = 'email' | 'codigo' | 'senha'
 
@@ -79,8 +80,9 @@ export function EsqueciSenha({
 
   function entrar(novaSenha?: string) {
     if (novaSenha !== undefined) {
-      if (novaSenha.length < 6) {
-        setErro('A senha precisa ter pelo menos 6 caracteres')
+      const erro = erroSenha(novaSenha)
+      if (erro) {
+        setErro(erro)
         return
       }
       if (novaSenha !== confirmacao) {
@@ -212,7 +214,7 @@ export function EsqueciSenha({
                 autoFocus
                 value={senha}
                 onChange={(e) => setSenha(e.target.value)}
-                placeholder="Pelo menos 6 caracteres"
+                placeholder={REGRA_SENHA}
                 className="pr-10"
               />
               <button

@@ -91,7 +91,7 @@ export function PerfilDialog({
 }
 
 function FormularioPerfil({ perfil, onFechar }: { perfil: PerfilCompleto; onFechar: () => void }) {
-  const { editarPerfil } = useAuth()
+  const { editarPerfil, signOut } = useAuth()
   const [nome, setNome] = useState(perfil.nome)
   const [cargo, setCargo] = useState(perfil.cargo)
   const [foto, setFoto] = useState<string | null>(perfil.foto)
@@ -261,6 +261,19 @@ function FormularioPerfil({ perfil, onFechar }: { perfil: PerfilCompleto; onFech
       </div>
 
       <DialogFooter className="border-t bg-muted/30 px-6 py-4">
+        <Button
+          type="button"
+          variant="ghost"
+          className="mr-auto text-muted-foreground"
+          title="Encerra o login em todos os computadores e celulares (inclusive este)"
+          onClick={async () => {
+            if (!confirm('Sair do sistema em todos os aparelhos? Você vai precisar entrar de novo.')) return
+            await api.post('/auth/sair-de-todos').catch(() => undefined)
+            await signOut()
+          }}
+        >
+          Sair de todos os aparelhos
+        </Button>
         <Button type="button" variant="outline" onClick={onFechar}>
           Cancelar
         </Button>

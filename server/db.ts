@@ -53,6 +53,11 @@ const colunasNovas: [string, string, string][] = [
   ['usuarios', 'observacoes', 'observacoes text null'],
   ['produtos', 'emoji', 'emoji varchar(16)'],
   ['produtos', 'foto', 'foto mediumtext'],
+  // Segurança: bloqueio após senhas erradas e versão da sessão (trocar a senha derruba os
+  // logins abertos em outros aparelhos).
+  ['usuarios', 'falhas_login', 'falhas_login int not null default 0'],
+  ['usuarios', 'bloqueado_ate', 'bloqueado_ate timestamp null'],
+  ['usuarios', 'sessao_versao', 'sessao_versao int not null default 0'],
   // Variedades: produtos com o mesmo grupo (ex.: "Café") viram um card só no PDV.
   ['produtos', 'grupo', 'grupo varchar(80) null'],
   // Quanto o cliente entregou em dinheiro (para o troco na 2ª via do comprovante).

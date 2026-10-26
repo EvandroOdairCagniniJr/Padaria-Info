@@ -39,10 +39,10 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
   res.status(500).json({ message: 'Erro interno no servidor.' })
 }
 
-// Limite simples em memória: 10 tentativas por minuto por IP e rota (login, cadastro, código).
+// Limite simples em memória: 20 tentativas por minuto por IP e rota (login, cadastro, código).
 // Freia quem tenta adivinhar senhas ou códigos; com um único servidor, memória basta.
 const JANELA_MS = 60_000
-const MAX_TENTATIVAS = 10
+const MAX_TENTATIVAS = 20
 const tentativas = new Map<string, { inicio: number; total: number }>()
 
 export function limitarTentativas(req: Request, res: Response, next: NextFunction) {
