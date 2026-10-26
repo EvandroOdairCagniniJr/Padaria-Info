@@ -35,22 +35,53 @@ import type { Papel } from '@/types/database'
 const todos: Papel[] = ['dono', 'admin', 'funcionario']
 const gestao: Papel[] = ['dono', 'admin']
 
-// Mesmas regras das rotas em AppRouter (RequirePapel).
-const navItems = [
-  { to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, papeis: gestao },
-  { to: '/pdv', label: 'PDV', icon: ShoppingCart, papeis: todos },
-  { to: '/caixa', label: 'Caixa', icon: Banknote, papeis: todos },
-  { to: '/vendas', label: 'Vendas', icon: Receipt, papeis: todos },
-  { to: '/encomendas', label: 'Encomendas', icon: CalendarClock, papeis: todos },
-  { to: '/produtos', label: 'Produtos', icon: Package, papeis: gestao },
-  { to: '/estoque', label: 'Estoque', icon: Warehouse, papeis: todos },
-  { to: '/producao', label: 'Produção', icon: ChefHat, papeis: todos },
-  { to: '/financeiro', label: 'Financeiro', icon: Wallet, papeis: gestao },
-  { to: '/margens', label: 'Margens e CMV', icon: Percent, papeis: gestao },
-  { to: '/metas', label: 'Metas', icon: Target, papeis: todos },
-  { to: '/equipe', label: 'Equipe', icon: Users, papeis: todos },
-  { to: '/padaria', label: 'Minha padaria', icon: Store, papeis: ['dono'] as Papel[] },
-  { to: '/guia', label: 'Guia e dicas', icon: BookOpen, papeis: todos },
+type ItemMenu = {
+  to: string
+  label: string
+  icon: typeof LayoutDashboard
+  papeis: Papel[]
+  end?: boolean
+}
+
+// Menu em seções. Mesmas regras das rotas em AppRouter (RequirePapel).
+const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
+  {
+    titulo: null,
+    itens: [{ to: '/', label: 'Dashboard', icon: LayoutDashboard, end: true, papeis: gestao }],
+  },
+  {
+    titulo: 'Balcão',
+    itens: [
+      { to: '/pdv', label: 'PDV', icon: ShoppingCart, papeis: todos },
+      { to: '/caixa', label: 'Caixa', icon: Banknote, papeis: todos },
+      { to: '/vendas', label: 'Vendas', icon: Receipt, papeis: todos },
+      { to: '/encomendas', label: 'Encomendas', icon: CalendarClock, papeis: todos },
+    ],
+  },
+  {
+    titulo: 'Produção',
+    itens: [
+      { to: '/producao', label: 'Produção', icon: ChefHat, papeis: todos },
+      { to: '/estoque', label: 'Estoque', icon: Warehouse, papeis: todos },
+      { to: '/produtos', label: 'Produtos', icon: Package, papeis: gestao },
+    ],
+  },
+  {
+    titulo: 'Gestão',
+    itens: [
+      { to: '/metas', label: 'Metas', icon: Target, papeis: todos },
+      { to: '/financeiro', label: 'Financeiro', icon: Wallet, papeis: gestao },
+      { to: '/margens', label: 'Margens e CMV', icon: Percent, papeis: gestao },
+    ],
+  },
+  {
+    titulo: 'Equipe',
+    itens: [
+      { to: '/equipe', label: 'Equipe', icon: Users, papeis: todos },
+      { to: '/padaria', label: 'Minha padaria', icon: Store, papeis: ['dono'] },
+      { to: '/guia', label: 'Guia e dicas', icon: BookOpen, papeis: todos },
+    ],
+  },
 ]
 
 // Topo do menu: o pão do ícone do site e o nome cadastrado em "Minha padaria".
@@ -88,36 +119,47 @@ export function MainLayout() {
 
   const menu = (
     <>
-      <nav className="flex-1 space-y-1 overflow-y-auto p-3">
-        {navItems
-          .filter((item) => user && item.papeis.includes(user.papel))
-          .map((item) => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.end}
-              onClick={() => setMenuAberto(false)}
-              className={({ isActive }) =>
-                cn(
-                  'flex items-center gap-2.5 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors',
-                  isActive
-                    ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
-                    : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
-                )
-              }
-            >
-              <item.icon className="size-4" />
-              {item.label}
-              {item.to === '/equipe' && novidades > 0 && (
-                <span
-                  className="ml-auto rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-semibold text-white"
-                  title={`${novidades} novidade(s) da equipe`}
-                >
-                  {novidades}
-                </span>
+      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+        {secoes.map((secao) => {
+          const itens = secao.itens.filter((item) => user && item.papeis.includes(user.papel))
+          if (itens.length === 0) return null
+          return (
+            <div key={secao.titulo ?? 'inicio'} className="space-y-1">
+              {secao.titulo && (
+                <p className="px-3 pb-0.5 text-[10px] font-semibold tracking-wider text-sidebar-foreground/45 uppercase">
+                  {secao.titulo}
+                </p>
               )}
-            </NavLink>
-          ))}
+              {itens.map((item) => (
+                <NavLink
+                  key={item.to}
+                  to={item.to}
+                  end={item.end}
+                  onClick={() => setMenuAberto(false)}
+                  className={({ isActive }) =>
+                    cn(
+                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm font-medium transition-colors',
+                      isActive
+                        ? 'bg-sidebar-primary text-sidebar-primary-foreground shadow-sm'
+                        : 'text-sidebar-foreground/75 hover:bg-sidebar-accent hover:text-sidebar-accent-foreground',
+                    )
+                  }
+                >
+                  <item.icon className="size-4" />
+                  {item.label}
+                  {item.to === '/equipe' && novidades > 0 && (
+                    <span
+                      className="ml-auto rounded-full bg-destructive px-1.5 text-[11px] leading-5 font-semibold text-white"
+                      title={`${novidades} novidade(s) da equipe`}
+                    >
+                      {novidades}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          )
+        })}
       </nav>
 
       <div className="border-t border-sidebar-border p-3">

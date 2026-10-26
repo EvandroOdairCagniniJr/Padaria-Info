@@ -1,6 +1,10 @@
 import {
+  Banknote,
+  CalendarClock,
   ChefHat,
   KeyRound,
+  Percent,
+  Target,
   Lightbulb,
   Package,
   ShoppingCart,
@@ -66,19 +70,85 @@ const guias: Guia[] = [
     ],
   },
   {
-    titulo: 'Recebendo mercadoria e registrando perdas (Estoque)',
+    titulo: 'Abrindo e fechando o caixa',
+    icone: Banknote,
+    link: '/caixa',
+    papeis: todos,
+    passos: [
+      'No começo do turno, abra o Caixa e informe o fundo de troco (o dinheiro que já está na gaveta).',
+      'Precisou tirar dinheiro da gaveta (cofre, pagar um fornecedor)? Registre uma "Sangria" com o motivo.',
+      'Colocou dinheiro para troco? Registre um "Suprimento".',
+      'No fim do turno, clique em "Fechar caixa" e conte as notas e as moedas: o sistema mostra na hora se bateu, sobrou ou faltou.',
+    ],
+    dicas: [
+      'As vendas entram no caixa de quem está logado. Cada pessoa abre e fecha o próprio caixa.',
+      'Sinal de encomenda e o restante pago na entrega também entram no caixa de quem recebeu.',
+      'Diferença pequena e frequente costuma ser troco errado: confira com calma antes de entregar.',
+    ],
+  },
+  {
+    titulo: 'Encomendas (bolos e pedidos de festa)',
+    icone: CalendarClock,
+    link: '/encomendas',
+    papeis: todos,
+    passos: [
+      'Clique em "Nova encomenda": cliente, WhatsApp, dia e hora, retirada ou entrega.',
+      'Adicione os itens (o preço do cadastro vem sugerido, mas pode ser ajustado ao combinado).',
+      'Escreva os detalhes, como a frase do bolo ou restrições ("sem lactose").',
+      'Recebeu sinal? Informe o valor (o botão "50%" calcula metade) e a forma de pagamento.',
+      'Acompanhe pelos botões: Confirmar → Iniciar produção → Marcar pronta.',
+      'Na retirada, clique em "Entregar": o sistema cobra só o que falta e registra a venda.',
+    ],
+    dicas: [
+      'Use "Enviar confirmação" e "Avisar que está pronta" para mandar a mensagem pronta no WhatsApp do cliente.',
+      'Encomendas atrasadas aparecem no topo, em vermelho.',
+    ],
+  },
+  {
+    titulo: 'Metas de vendas',
+    icone: Target,
+    link: '/metas',
+    papeis: todos,
+    passos: [
+      'Em Metas você acompanha quanto já vendeu hoje, na semana e no mês, e quanto falta.',
+      'Dono: clique em "Definir metas" e escolha de quem é a meta: a padaria toda, o padrão de cada pessoa ou uma pessoa específica.',
+      'Preencha o valor por dia, por semana e/ou por mês. Em branco = sem meta naquele período.',
+    ],
+    dicas: [
+      'Na semana e no mês aparece a projeção "no ritmo atual": dá para saber cedo se vai bater.',
+      'Quando uma venda faz você bater a meta do dia, o sistema comemora junto. 🎉',
+    ],
+  },
+  {
+    titulo: 'Recebendo mercadoria (Estoque)',
     icone: Warehouse,
     link: '/estoque',
     papeis: todos,
     passos: [
       'Chegou mercadoria: em Estoque, clique em "Ajustar" no produto e escolha "Entrada" com a quantidade recebida.',
-      'Perda, quebra, vencido ou doação: use "Saída" e escreva o motivo.',
+      'Sobra, vencido ou queimado: registre em Produção → Perdas (é o que deixa a sugestão de produção certeira).',
       'Contagem do estoque: use "Ajuste" e informe o total que você contou na prateleira.',
     ],
     dicas: [
       'Produtos com estoque baixo aparecem primeiro na lista, em vermelho.',
       'Sempre preencha o motivo nas saídas: ajuda o dono a entender as perdas.',
       'Vendas e produções já mexem no estoque sozinhas. Não lance de novo.',
+    ],
+  },
+  {
+    titulo: 'Quanto produzir e as perdas do dia',
+    icone: ChefHat,
+    link: '/producao',
+    papeis: todos,
+    passos: [
+      'Em Produção → Sugestão do dia, veja quanto produzir de cada item hoje ou amanhã.',
+      'A conta usa as vendas das últimas 4 semanas no mesmo dia da semana e as sobras registradas, e já desconta o estoque.',
+      'Clique em "Planejar" (ou "Planejar todas as fornadas") para mandar direto para o planejamento.',
+      'No fechamento, em Produção → Perdas, registre o que sobrou, venceu ou queimou: vários produtos de uma vez.',
+    ],
+    dicas: [
+      'Quase nunca sobra? O sistema sugere um pouco a mais — provavelmente estava faltando.',
+      'Sobra muito? Ele sugere só o que vende. Registrar as sobras todo dia é o segredo.',
     ],
   },
   {
@@ -128,6 +198,22 @@ const guias: Guia[] = [
     ],
   },
   {
+    titulo: 'Margens, CMV e preço certo',
+    icone: Percent,
+    link: '/margens',
+    papeis: gestao,
+    passos: [
+      'Em Margens e CMV, veja faturamento, custo dos produtos vendidos, lucro bruto e CMV do período.',
+      'O custo vem da ficha técnica (ingredientes ÷ rendimento) ou do custo cadastrado no produto.',
+      'Produtos com custo acima da meta ficam em vermelho, com o preço sugerido: "Usar R$ X" aplica na hora.',
+      'Dono: ajuste a meta de CMV no cartão "CMV do período" (padrão 35%).',
+    ],
+    dicas: [
+      'Mantenha o custo dos ingredientes atualizado a cada compra: a margem de todos os produtos se ajusta sozinha.',
+      'Referência de mercado: padaria com produção própria trabalha com CMV entre 35% e 42%.',
+    ],
+  },
+  {
     titulo: 'Contas a pagar e a receber (Financeiro)',
     icone: Wallet,
     link: '/financeiro',
@@ -145,7 +231,8 @@ const guias: Guia[] = [
     link: '/equipe',
     papeis: ['dono'],
     passos: [
-      'Em Equipe, clique em "Novo membro", preencha nome, e-mail e uma senha inicial, e escolha o papel.',
+      'Convide a equipe: mostre o código de convite que aparece em Equipe. A pessoa cria a conta em "Criar conta → Entrar na equipe" e você libera o acesso.',
+      'Ou cadastre direto: em Equipe, clique em "Novo membro", preencha nome, e-mail e uma senha inicial, e escolha o papel.',
       'Funcionário: PDV, estoque e produção. Admin: gerente, vê tudo menos a página Equipe.',
       'Passe o e-mail e a senha para a pessoa e mostre este Guia no primeiro dia.',
       'Acompanhe por período (hoje, 7 ou 30 dias) quanto cada um vendeu, as produções e os ajustes de estoque.',
@@ -160,8 +247,8 @@ const guias: Guia[] = [
 ]
 
 const dicasGerais = [
-  'Outros computadores e celulares da padaria podem abrir o sistema pelo endereço de rede que aparece ao ligar o servidor (ex: http://192.168.0.10:3000).',
-  'O computador com o servidor precisa ficar ligado (e o MySQL rodando) para o sistema funcionar nos outros.',
+  'O Dashboard abre com "Hoje na sua padaria": comece o dia por ele — mostra o que pede atenção agora.',
+  'Abra o sistema em qualquer computador, tablet ou celular: é só entrar com seu e-mail e senha.',
   'Se algo der erro, a mensagem aparece no canto da tela. Tire uma foto e mostre ao responsável.',
 ]
 
