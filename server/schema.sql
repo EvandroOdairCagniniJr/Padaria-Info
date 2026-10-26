@@ -228,3 +228,38 @@ create table if not exists perdas (
   index perdas_padaria_data_idx (padaria_id, created_at),
   foreign key (produto_id) references produtos (id)
 );
+
+-- Encomendas (bolos, salgados para festa...): número sequencial por padaria, retirada/entrega
+-- agendada, sinal e status. Ao entregar vira uma venda (venda_id) e baixa o estoque.
+create table if not exists encomendas (
+  id char(36) primary key,
+  padaria_id char(36) not null,
+  numero int not null,
+  cliente_nome varchar(120) not null,
+  cliente_telefone varchar(11),
+  retirada_em timestamp not null,
+  entrega boolean not null default false,
+  endereco varchar(255),
+  status enum('reservada', 'confirmada', 'em_producao', 'pronta', 'entregue', 'cancelada')
+    not null default 'reservada',
+  total decimal(10, 2) not null default 0,
+  sinal decimal(10, 2) not null default 0,
+  forma_sinal enum('dinheiro', 'cartao_credito', 'cartao_debito', 'pix'),
+  observacoes text,
+  venda_id char(36),
+  created_by char(36),
+  created_at timestamp not null default current_timestamp,
+  unique key encomendas_numero_uk (padaria_id, numero),
+  index encomendas_retirada_idx (padaria_id, retirada_em)
+);
+
+create table if not exists encomendas_itens (
+  id char(36) primary key,
+  encomenda_id char(36) not null,
+  produto_id char(36) not null,
+  quantidade decimal(10, 3) not null check (quantidade > 0),
+  preco_unitario decimal(10, 2) not null check (preco_unitario >= 0),
+  subtotal decimal(10, 2) not null,
+  foreign key (encomenda_id) references encomendas (id) on delete cascade,
+  foreign key (produto_id) references produtos (id)
+);
