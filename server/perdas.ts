@@ -174,8 +174,10 @@ const PESOS = [4, 3, 2, 1]
 // provavelmente faltou → sugere 10% a mais; se sobra muito, sugere só o que vende.
 // `inicio` = início do dia desejado no relógio da padaria.
 perdasRouter.get('/producao/sugestao', async (req, res) => {
-  const inicio = lerData(req.query.inicio, 'Dia')
-  const padariaId: string = res.locals.padariaId
+  res.json(await calcularSugestao(res.locals.padariaId, lerData(req.query.inicio, 'Dia')))
+})
+
+export async function calcularSugestao(padariaId: string, inicio: Date) {
   const janelas = PESOS.map((_, k) => {
     const de = new Date(inicio.getTime() - (k + 1) * 7 * DIA_MS)
     return { de, ate: new Date(de.getTime() + DIA_MS) }
@@ -268,5 +270,5 @@ perdasRouter.get('/producao/sugestao', async (req, res) => {
     })
   }
   sugestoes.sort((a, b) => b.media_vendida - a.media_vendida)
-  res.json(sugestoes)
-})
+  return sugestoes
+}

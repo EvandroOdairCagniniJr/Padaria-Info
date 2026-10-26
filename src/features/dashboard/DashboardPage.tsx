@@ -15,6 +15,7 @@ import { Badge } from '@/components/ui/badge'
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
 import { useAuth } from '@/features/auth/AuthContext'
 import { useVendasHoje } from '@/features/dashboard/api'
+import { Recomendacoes } from '@/features/dashboard/Recomendacoes'
 import { useMural } from '@/features/equipe/api'
 import { usePadaria } from '@/features/padaria/api'
 import { useContasFinanceiras } from '@/features/financeiro/api'
@@ -146,6 +147,13 @@ export function DashboardPage() {
           <ArrowRight className="size-4 shrink-0 text-primary" />
         </Link>
       )}
+
+      <section className="space-y-3">
+        <h2 className="flex items-center gap-2 font-heading text-lg font-semibold">
+          Hoje na sua padaria
+        </h2>
+        <Recomendacoes />
+      </section>
 
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
