@@ -21,6 +21,7 @@ const MetasPage = lazy(paginas.metas)
 const EncomendasPage = lazy(paginas.encomendas)
 const CaixaPage = lazy(paginas.caixa)
 const MargensPage = lazy(paginas.margens)
+const AnalisePage = lazy(paginas.analise)
 
 const carregando = (
   <div className="flex min-h-svh items-center justify-center">
@@ -58,6 +59,7 @@ export function AppRouter() {
               <Route path="produtos" element={<ProdutosPage />} />
               <Route path="financeiro" element={<FinanceiroPage />} />
               <Route path="margens" element={<MargensPage />} />
+              <Route path="analise" element={<AnalisePage />} />
             </Route>
 
             <Route element={<RequirePapel papeis={['dono']} />}>

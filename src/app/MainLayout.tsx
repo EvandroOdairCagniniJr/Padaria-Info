@@ -1,5 +1,6 @@
 import {
   Banknote,
+  BarChart3,
   BookOpen,
   CalendarClock,
   ChefHat,
@@ -69,6 +70,7 @@ const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
   {
     titulo: 'Gestão',
     itens: [
+      { to: '/analise', label: 'Análise de vendas', icon: BarChart3, papeis: gestao },
       { to: '/metas', label: 'Metas', icon: Target, papeis: todos },
       { to: '/financeiro', label: 'Financeiro', icon: Wallet, papeis: gestao },
       { to: '/margens', label: 'Margens e CMV', icon: Percent, papeis: gestao },

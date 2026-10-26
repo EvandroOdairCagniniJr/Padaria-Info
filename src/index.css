@@ -187,6 +187,9 @@
 @keyframes barra-enche { from { transform: scaleX(0); } }
 .barra-enche { transform-origin: left; animation: barra-enche 0.9s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
 
+.barra-sobe { transform-origin: bottom; animation: barra-sobe 0.7s cubic-bezier(0.2, 0.7, 0.2, 1) both; }
+@keyframes barra-sobe { from { transform: scaleY(0); } }
+
 /* Total do PDV dá um "pulo" quando entra item no pedido. */
 @keyframes total-pulso {
   0% { transform: scale(1); }
@@ -257,7 +260,7 @@
 .conta-anel { animation: conta-anel 0.6s ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tela-entra, .barra-enche, .total-pulso, .venda-fundo, .venda-cartao, .venda-circulo,
+  .tela-entra, .barra-enche, .barra-sobe, .total-pulso, .venda-fundo, .venda-cartao, .venda-circulo,
   .venda-onda, .venda-particula, .venda-meta, .conta-pulo, .conta-anel {
     animation: none;
   }
