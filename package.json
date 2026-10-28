@@ -15,7 +15,8 @@
     "start": "npm run build && node server/index.ts",
     "dev:server": "node --watch server/index.ts",
     "banco:local": "node scripts/banco-local.mjs",
-    "migrar:mysql": "node scripts/migrar-mysql.mjs"
+    "migrar:mysql": "node scripts/migrar-mysql.mjs",
+    "teste:seguranca": "node scripts/teste-seguranca.mjs"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
