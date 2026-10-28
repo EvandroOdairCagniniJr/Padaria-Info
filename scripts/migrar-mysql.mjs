@@ -72,13 +72,17 @@ for (const tabela of tabelas) {
   )
   const permitidas = new Set(colunasDestino.map((c) => c.column_name))
   const [linhas] = await origem.query(`select * from \`${tabela}\``)
+  // Em lotes de 200 linhas por comando (com o banco longe, uma linha por vez era lento).
+  const colunas = linhas.length ? Object.keys(linhas[0]).filter((c) => permitidas.has(c)) : []
   let copiadas = 0
-  for (const linha of linhas) {
-    const colunas = Object.keys(linha).filter((c) => permitidas.has(c))
-    const valores = colunas.map((c) => linha[c])
-    const marcadores = colunas.map((_, i) => `$${i + 1}`).join(', ')
+  for (let i = 0; i < linhas.length; i += 200) {
+    const lote = linhas.slice(i, i + 200)
+    const valores = lote.flatMap((linha) => colunas.map((c) => linha[c]))
+    const tuplas = lote
+      .map((_, l) => `(${colunas.map((_, k) => `$${l * colunas.length + k + 1}`).join(', ')})`)
+      .join(', ')
     const r = await destino.query(
-      `insert into ${tabela} (${colunas.map((c) => `"${c}"`).join(', ')}) values (${marcadores})
+      `insert into ${tabela} (${colunas.map((c) => `"${c}"`).join(', ')}) values ${tuplas}
        on conflict do nothing`,
       valores,
     )

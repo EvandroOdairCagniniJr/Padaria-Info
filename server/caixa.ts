@@ -32,30 +32,44 @@ export async function caixaAberto(conn: Executor, padariaId: string, operadorId:
 // Resumo do caixa: recebido por forma (vendas + sinais), sangrias/suprimentos e o esperado.
 async function resumo(conn: Executor, caixa: RowDataPacket) {
   // Venda de encomenda: o sinal já entrou antes (talvez em outro caixa) — aqui só o restante.
-  const [vendas] = await conn.query<RowDataPacket[]>(
-    `select v.forma_pagamento as forma, count(*) as quantidade,
+  const consultaVendas = () =>
+    conn.query<RowDataPacket[]>(
+      `select v.forma_pagamento as forma, count(*) as quantidade,
             coalesce(sum(v.total - coalesce(e.sinal, 0)), 0) as valor
      from vendas v left join encomendas e on e.venda_id = v.id
      where v.caixa_id = ? and v.status <> 'devolvida'
      group by v.forma_pagamento`,
-    [caixa.id],
-  )
-  const [sinais] = await conn.query<RowDataPacket[]>(
-    `select forma_sinal as forma, count(*) as quantidade, coalesce(sum(sinal), 0) as valor
+      [caixa.id],
+    )
+  const consultaSinais = () =>
+    conn.query<RowDataPacket[]>(
+      `select forma_sinal as forma, count(*) as quantidade, coalesce(sum(sinal), 0) as valor
      from encomendas where caixa_sinal_id = ? and sinal > 0 group by forma_sinal`,
-    [caixa.id],
-  )
-  const [devolvidas] = await conn.query<RowDataPacket[]>(
-    `select count(*) as quantidade, coalesce(sum(total), 0) as valor
+      [caixa.id],
+    )
+  const consultaDevolvidas = () =>
+    conn.query<RowDataPacket[]>(
+      `select count(*) as quantidade, coalesce(sum(total), 0) as valor
      from vendas where caixa_id = ? and status = 'devolvida'`,
-    [caixa.id],
-  )
-  const [movimentos] = await conn.query<RowDataPacket[]>(
-    `select m.id, m.tipo, m.valor, m.motivo, m.created_at, u.nome as feito_por
+      [caixa.id],
+    )
+  const consultaMovimentos = () =>
+    conn.query<RowDataPacket[]>(
+      `select m.id, m.tipo, m.valor, m.motivo, m.created_at, u.nome as feito_por
      from caixa_movimentos m left join usuarios u on u.id = m.created_by
      where m.caixa_id = ? order by m.created_at`,
-    [caixa.id],
-  )
+      [caixa.id],
+    )
+  const consultas = [consultaVendas, consultaSinais, consultaDevolvidas, consultaMovimentos]
+  // Fora de transação as quatro consultas vão juntas; dentro, uma conexão só: em sequência.
+  const resultados =
+    conn === pool
+      ? await Promise.all(consultas.map((c) => c()))
+      : await consultas.reduce<Promise<(readonly [RowDataPacket[]])[]>>(
+          async (acc, c) => [...(await acc), await c()],
+          Promise.resolve([]),
+        )
+  const [[vendas], [sinais], [devolvidas], [movimentos]] = resultados
   const recebido = zerado()
   let quantidadeVendas = 0
   for (const v of vendas) {
@@ -63,7 +77,9 @@ async function resumo(conn: Executor, caixa: RowDataPacket) {
     quantidadeVendas += Number(v.quantidade)
   }
   for (const s of sinais) recebido[s.forma as Forma] += Number(s.valor)
-  const sangrias = movimentos.filter((m) => m.tipo === 'sangria').reduce((s, m) => s + Number(m.valor), 0)
+  const sangrias = movimentos
+    .filter((m) => m.tipo === 'sangria')
+    .reduce((s, m) => s + Number(m.valor), 0)
   const suprimentos = movimentos
     .filter((m) => m.tipo === 'suprimento')
     .reduce((s, m) => s + Number(m.valor), 0)
@@ -83,7 +99,10 @@ async function resumo(conn: Executor, caixa: RowDataPacket) {
     total_recebido: centavos(formas.reduce((s, f) => s + recebido[f], 0)),
     quantidade_vendas: quantidadeVendas,
     sinais: sinais.reduce((s, x) => s + Number(x.quantidade), 0),
-    devolvidas: { quantidade: Number(devolvidas[0].quantidade), valor: Number(devolvidas[0].valor) },
+    devolvidas: {
+      quantidade: Number(devolvidas[0].quantidade),
+      valor: Number(devolvidas[0].valor),
+    },
     sangrias: centavos(sangrias),
     suprimentos: centavos(suprimentos),
     movimentos: movimentos.map((m) => ({ ...m, valor: Number(m.valor) })),
@@ -194,7 +213,13 @@ caixaRouter.post('/fechar', async (req, res) => {
     await conn.query(
       `update caixas set fechado_em = now(), esperado = ?, contado = ?, diferenca = ?, observacoes = ?
        where id = ?`,
-      [JSON.stringify(r.esperado), JSON.stringify(f.contado), diferenca, f.observacoes || null, caixa.id],
+      [
+        JSON.stringify(r.esperado),
+        JSON.stringify(f.contado),
+        diferenca,
+        f.observacoes || null,
+        caixa.id,
+      ],
     )
     return { id: caixa.id, esperado: r.esperado, contado: f.contado, diferenca, resumo: r }
   })
@@ -214,8 +239,8 @@ caixaRouter.get('/historico', exigirPapel('dono', 'admin'), async (req, res) => 
      order by c.aberto_em desc`,
     [res.locals.padariaId, q.desde, q.ate],
   )
-  const lista = []
-  // Caixa ainda aberto: o resumo é o parcial até agora.
-  for (const c of rows) lista.push({ ...formatarCaixa(c), resumo: await resumo(pool, c) })
+  // Resumo de cada caixa ao mesmo tempo (caixa ainda aberto: o parcial até agora).
+  const resumos = await Promise.all(rows.map((c) => resumo(pool, c)))
+  const lista = rows.map((c, i) => ({ ...formatarCaixa(c), resumo: resumos[i] }))
   res.json(lista)
 })

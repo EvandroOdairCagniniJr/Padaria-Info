@@ -13,6 +13,7 @@ import { z } from 'zod'
 import { novoCodigoConvite, pool } from './db.ts'
 import { HttpError, limitarTentativas, validar } from './http.ts'
 import { registrarAcesso } from './seguranca.ts'
+import { esquecerUsuario, guardarNoCache, lerDoCache } from './cacheUsuarios.ts'
 import {
   dadosPessoaisSchema,
   garantirCpfUnico,
@@ -93,12 +94,21 @@ async function iniciarSessao(res: Response, usuario: Usuario) {
   res.json(usuario)
 }
 
-async function buscarUsuarioAtivo(id: string, versao?: number): Promise<Usuario | null> {
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `select ${colunasUsuario}, sessao_versao from usuarios where id = ? and ativo = true`,
-    [id],
-  )
-  const u = rows[0]
+async function buscarUsuarioAtivo(
+  id: string,
+  versao?: number,
+  { usarCache = false } = {},
+): Promise<Usuario | null> {
+  let u = usarCache ? lerDoCache(id) : null
+  if (!u) {
+    const [rows] = await pool.query<RowDataPacket[]>(
+      `select ${colunasUsuario}, sessao_versao from usuarios where id = ? and ativo = true`,
+      [id],
+    )
+    u = rows[0] ?? null
+    if (u) guardarNoCache(id, u)
+    else esquecerUsuario(id)
+  }
   if (!u) return null
   if (versao !== undefined && Number(u.sessao_versao) !== versao) return null
   const { sessao_versao: _v, ...usuario } = u
@@ -108,6 +118,7 @@ async function buscarUsuarioAtivo(id: string, versao?: number): Promise<Usuario 
 // Derruba todos os logins da pessoa (troca de senha, "sair de todos os aparelhos").
 export async function encerrarSessoes(usuarioId: string) {
   await pool.query('update usuarios set sessao_versao = sessao_versao + 1 where id = ?', [usuarioId])
+  esquecerUsuario(usuarioId)
 }
 
 async function emailEmUso(email: string) {
@@ -452,7 +463,7 @@ export async function exigirLogin(req: Request, res: Response, next: NextFunctio
   } catch {
     id = null
   }
-  const usuario = id ? await buscarUsuarioAtivo(id, versao) : null
+  const usuario = id ? await buscarUsuarioAtivo(id, versao, { usarCache: true }) : null
   if (!usuario) {
     res.status(401).json({ message: 'Sua sessão expirou. Entre novamente.' })
     return

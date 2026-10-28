@@ -31,7 +31,9 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 // 1 → "1 produto", 3 → "3 produtos".
 const plural = (n: number, um: string, varios: string) => `${n} ${n === 1 ? um : varios}`
 const lista = (nomes: string[], max = 3) =>
-  nomes.length <= max ? nomes.join(', ') : `${nomes.slice(0, max).join(', ')} e mais ${nomes.length - max}`
+  nomes.length <= max
+    ? nomes.join(', ')
+    : `${nomes.slice(0, max).join(', ')} e mais ${nomes.length - max}`
 
 // `inicio` = início de hoje no relógio da padaria (o servidor roda em UTC).
 recomendacoesRouter.get('/', async (req, res) => {
@@ -47,206 +49,231 @@ recomendacoesRouter.get('/', async (req, res) => {
   if (!Number.isFinite(tz) || Math.abs(tz) > 14 * 60) throw new HttpError(400, 'Fuso inválido')
   const horaLocal = (d: Date) => new Date(d.getTime() - tz * 60_000).toISOString().slice(11, 16)
   const r: Recomendacao[] = []
+  // Data de hoje (YYYY-MM-DD) no relógio da padaria.
+  const dataHoje = new Date(inicio.getTime() + 12 * 60 * 60 * 1000).toISOString().slice(0, 10)
 
-  // 1. Estoque no mínimo ou abaixo.
-  const [baixos] = await pool.query<RowDataPacket[]>(
-    `select nome, estoque_atual, unidade from produtos
+  // Blocos independentes rodam ao mesmo tempo (com o banco longe, em sequência eram ~3 s).
+  const estoque = async () => {
+    // 1. Estoque no mínimo ou abaixo.
+    const [baixos] = await pool.query<RowDataPacket[]>(
+      `select nome, estoque_atual, unidade from produtos
      where padaria_id = ? and ativo = true and estoque_minimo > 0 and estoque_atual <= estoque_minimo
      order by estoque_atual / estoque_minimo`,
-    [padariaId],
-  )
-  if (baixos.length) {
-    r.push({
-      id: 'estoque',
-      tom: 'alerta',
-      icone: 'package',
-      titulo: `${plural(baixos.length, 'produto', 'produtos')} no estoque mínimo`,
-      texto: `Repor: ${lista(baixos.map((b) => b.nome))}.`,
-      link: '/estoque',
-      acao: 'Ver estoque',
-      peso: 90,
-    })
+      [padariaId],
+    )
+    if (baixos.length) {
+      r.push({
+        id: 'estoque',
+        tom: 'alerta',
+        icone: 'package',
+        titulo: `${plural(baixos.length, 'produto', 'produtos')} no estoque mínimo`,
+        texto: `Repor: ${lista(baixos.map((b) => b.nome))}.`,
+        link: '/estoque',
+        acao: 'Ver estoque',
+        peso: 90,
+      })
+    }
   }
 
-  // 2. Encomendas atrasadas e de hoje.
-  const [encomendas] = await pool.query<RowDataPacket[]>(
-    `select numero, cliente_nome, retirada_em, status from encomendas
+  const encomendasDoDia = async () => {
+    // 2. Encomendas atrasadas e de hoje.
+    const [encomendas] = await pool.query<RowDataPacket[]>(
+      `select numero, cliente_nome, retirada_em, status from encomendas
      where padaria_id = ? and status in ('reservada', 'confirmada', 'em_producao', 'pronta')
        and retirada_em < ? order by retirada_em`,
-    [padariaId, amanha],
-  )
-  const atrasadas = encomendas.filter((e) => new Date(e.retirada_em) < agora && e.status !== 'pronta')
-  const deHoje = encomendas.filter((e) => new Date(e.retirada_em) >= inicio && !atrasadas.includes(e))
-  if (atrasadas.length) {
-    r.push({
-      id: 'encomendas-atrasadas',
-      tom: 'alerta',
-      icone: 'calendar',
-      titulo: plural(atrasadas.length, 'encomenda atrasada', 'encomendas atrasadas'),
-      texto: `Já passou do horário: ${lista(atrasadas.map((e) => `nº ${e.numero} (${e.cliente_nome})`))}.`,
-      link: '/encomendas',
-      acao: 'Ver encomendas',
-      peso: 95,
-    })
-  }
-  if (deHoje.length) {
-    const naoProntas = deHoje.filter((e) => e.status !== 'pronta').length
-    r.push({
-      id: 'encomendas-hoje',
-      tom: naoProntas ? 'atencao' : 'boa',
-      icone: 'calendar',
-      titulo: `${plural(deHoje.length, 'encomenda', 'encomendas')} para hoje`,
-      texto: naoProntas
-        ? `${naoProntas === 1 ? '1 ainda não está pronta' : `${naoProntas} ainda não estão prontas`}. A primeira sai às ${horaLocal(new Date(deHoje[0].retirada_em))}.`
-        : 'Todas prontas. Que tal avisar os clientes pelo WhatsApp?',
-      link: '/encomendas',
-      acao: 'Abrir agenda',
-      peso: 80,
-    })
-  }
-
-  // 3. Produção sugerida ainda não planejada para hoje.
-  const sugestao = await calcularSugestao(padariaId, inicio)
-  const fornadas = sugestao.reduce((s, x) => s + (x.fornadas ?? 0), 0)
-  const dataHoje = new Date(inicio.getTime() + 12 * 60 * 60 * 1000).toISOString().slice(0, 10)
-  const [[planejadas]] = await pool.query<RowDataPacket[]>(
-    'select count(*) as n from producoes where padaria_id = ? and data = ?',
-    [padariaId, dataHoje],
-  )
-  if (fornadas > 0 && Number(planejadas.n) === 0) {
-    const principais = sugestao.filter((s) => s.sugestao > 0).slice(0, 3)
-    r.push({
-      id: 'producao',
-      tom: 'oportunidade',
-      icone: 'chef',
-      titulo: `Produção sugerida: ${plural(fornadas, 'fornada', 'fornadas')} hoje`,
-      texto: `Pelo histórico deste dia da semana: ${lista(principais.map((s) => `${s.sugestao} ${s.unidade} de ${s.nome}`))}.`,
-      link: '/producao',
-      acao: 'Planejar',
-      peso: 70,
-    })
+      [padariaId, amanha],
+    )
+    const atrasadas = encomendas.filter(
+      (e) => new Date(e.retirada_em) < agora && e.status !== 'pronta',
+    )
+    const deHoje = encomendas.filter(
+      (e) => new Date(e.retirada_em) >= inicio && !atrasadas.includes(e),
+    )
+    if (atrasadas.length) {
+      r.push({
+        id: 'encomendas-atrasadas',
+        tom: 'alerta',
+        icone: 'calendar',
+        titulo: plural(atrasadas.length, 'encomenda atrasada', 'encomendas atrasadas'),
+        texto: `Já passou do horário: ${lista(atrasadas.map((e) => `nº ${e.numero} (${e.cliente_nome})`))}.`,
+        link: '/encomendas',
+        acao: 'Ver encomendas',
+        peso: 95,
+      })
+    }
+    if (deHoje.length) {
+      const naoProntas = deHoje.filter((e) => e.status !== 'pronta').length
+      r.push({
+        id: 'encomendas-hoje',
+        tom: naoProntas ? 'atencao' : 'boa',
+        icone: 'calendar',
+        titulo: `${plural(deHoje.length, 'encomenda', 'encomendas')} para hoje`,
+        texto: naoProntas
+          ? `${naoProntas === 1 ? '1 ainda não está pronta' : `${naoProntas} ainda não estão prontas`}. A primeira sai às ${horaLocal(new Date(deHoje[0].retirada_em))}.`
+          : 'Todas prontas. Que tal avisar os clientes pelo WhatsApp?',
+        link: '/encomendas',
+        acao: 'Abrir agenda',
+        peso: 80,
+      })
+    }
   }
 
-  // 4. Sobra alta nos últimos 7 dias.
-  const [sobras] = await pool.query<RowDataPacket[]>(
-    `select p.nome, sum(pe.quantidade) as perdido, sum(pe.quantidade * pe.custo_unitario) as custo,
+  const producao = async () => {
+    // 3. Produção sugerida ainda não planejada para hoje.
+    const sugestao = await calcularSugestao(padariaId, inicio)
+    const fornadas = sugestao.reduce((s, x) => s + (x.fornadas ?? 0), 0)
+      const [[planejadas]] = await pool.query<RowDataPacket[]>(
+      'select count(*) as n from producoes where padaria_id = ? and data = ?',
+      [padariaId, dataHoje],
+    )
+    if (fornadas > 0 && Number(planejadas.n) === 0) {
+      const principais = sugestao.filter((s) => s.sugestao > 0).slice(0, 3)
+      r.push({
+        id: 'producao',
+        tom: 'oportunidade',
+        icone: 'chef',
+        titulo: `Produção sugerida: ${plural(fornadas, 'fornada', 'fornadas')} hoje`,
+        texto: `Pelo histórico deste dia da semana: ${lista(principais.map((s) => `${s.sugestao} ${s.unidade} de ${s.nome}`))}.`,
+        link: '/producao',
+        acao: 'Planejar',
+        peso: 70,
+      })
+    }
+  }
+
+  const perdas = async () => {
+    // 4. Sobra alta nos últimos 7 dias.
+    const [sobras] = await pool.query<RowDataPacket[]>(
+      `select p.nome, sum(pe.quantidade) as perdido, sum(pe.quantidade * pe.custo_unitario) as custo,
             (select coalesce(sum(i.quantidade), 0) from vendas_itens i join vendas v on v.id = i.venda_id
               where i.produto_id = p.id and v.status <> 'devolvida' and v.created_at >= ?) as vendido
      from perdas pe join produtos p on p.id = pe.produto_id
      where pe.padaria_id = ? and pe.created_at >= ?
      group by p.id, p.nome`,
-    [new Date(inicio.getTime() - 7 * DIA), padariaId, new Date(inicio.getTime() - 7 * DIA)],
-  )
-  const altas = sobras
-    .map((s) => ({
-      nome: String(s.nome),
-      custo: Number(s.custo),
-      taxa: Number(s.perdido) / (Number(s.perdido) + Number(s.vendido) || 1),
-    }))
-    .filter((s) => s.taxa > 0.1)
-    .sort((a, b) => b.custo - a.custo)
-  if (altas.length) {
-    const custo = altas.reduce((s, a) => s + a.custo, 0)
-    r.push({
-      id: 'perdas',
-      tom: 'atencao',
-      icone: 'trash',
-      titulo: `Sobra alta: ${brl(custo)} perdidos em 7 dias`,
-      texto: `Produza menos de ${lista(altas.map((a) => `${a.nome} (${Math.round(a.taxa * 100)}% sobrou)`), 2)}.`,
-      link: '/producao',
-      acao: 'Ver perdas',
-      peso: 65,
-      gestao: true,
-    })
-  }
-
-  // 5. Preço defasado (custo acima da meta de CMV) em produto que vende.
-  if (gestao) {
-    const cmvAlvo = Number(await lerConfig(padariaId, 'cmv_alvo', '35')) / 100
-    const custos = await custosDosProdutos(padariaId)
-    const [vendidos30] = await pool.query<RowDataPacket[]>(
-      `select distinct i.produto_id from vendas_itens i join vendas v on v.id = i.venda_id
-       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ?`,
-      [padariaId, new Date(inicio.getTime() - 30 * DIA)],
+      [new Date(inicio.getTime() - 7 * DIA), padariaId, new Date(inicio.getTime() - 7 * DIA)],
     )
-    const vende = new Set(vendidos30.map((v) => v.produto_id))
-    const defasados = custos.filter(
-      (p) => p.preco_venda > 0 && p.custo != null && p.custo / p.preco_venda > cmvAlvo && vende.has(p.id),
-    )
-    if (defasados.length) {
+    const altas = sobras
+      .map((s) => ({
+        nome: String(s.nome),
+        custo: Number(s.custo),
+        taxa: Number(s.perdido) / (Number(s.perdido) + Number(s.vendido) || 1),
+      }))
+      .filter((s) => s.taxa > 0.1)
+      .sort((a, b) => b.custo - a.custo)
+    if (altas.length) {
+      const custo = altas.reduce((s, a) => s + a.custo, 0)
       r.push({
-        id: 'precos',
+        id: 'perdas',
         tom: 'atencao',
-        icone: 'tag',
-        titulo: plural(defasados.length, 'preço defasado', 'preços defasados'),
-        texto: `O custo passou da meta de CMV (${Math.round(cmvAlvo * 100)}%) em ${lista(defasados.map((d) => d.nome))}.`,
-        link: '/margens',
-        acao: 'Revisar preços',
-        peso: 60,
+        icone: 'trash',
+        titulo: `Sobra alta: ${brl(custo)} perdidos em 7 dias`,
+        texto: `Produza menos de ${lista(
+          altas.map((a) => `${a.nome} (${Math.round(a.taxa * 100)}% sobrou)`),
+          2,
+        )}.`,
+        link: '/producao',
+        acao: 'Ver perdas',
+        peso: 65,
         gestao: true,
       })
     }
   }
 
-  // 6. Ritmo de vendas: hoje até agora × mesmo horário do mesmo dia da semana passada.
-  const decorrido = Math.min(agora.getTime(), amanha.getTime()) - inicio.getTime()
-  const [[ritmo]] = await pool.query<RowDataPacket[]>(
-    `select
+  const precos = async () => {
+    // 5. Preço defasado (custo acima da meta de CMV) em produto que vende.
+    if (gestao) {
+      const cmvAlvo = Number(await lerConfig(padariaId, 'cmv_alvo', '35')) / 100
+      const custos = await custosDosProdutos(padariaId)
+      const [vendidos30] = await pool.query<RowDataPacket[]>(
+        `select distinct i.produto_id from vendas_itens i join vendas v on v.id = i.venda_id
+       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ?`,
+        [padariaId, new Date(inicio.getTime() - 30 * DIA)],
+      )
+      const vende = new Set(vendidos30.map((v) => v.produto_id))
+      const defasados = custos.filter(
+        (p) =>
+          p.preco_venda > 0 &&
+          p.custo != null &&
+          p.custo / p.preco_venda > cmvAlvo &&
+          vende.has(p.id),
+      )
+      if (defasados.length) {
+        r.push({
+          id: 'precos',
+          tom: 'atencao',
+          icone: 'tag',
+          titulo: plural(defasados.length, 'preço defasado', 'preços defasados'),
+          texto: `O custo passou da meta de CMV (${Math.round(cmvAlvo * 100)}%) em ${lista(defasados.map((d) => d.nome))}.`,
+          link: '/margens',
+          acao: 'Revisar preços',
+          peso: 60,
+          gestao: true,
+        })
+      }
+    }
+  }
+
+  const ritmoEMeta = async () => {
+    // 6. Ritmo de vendas: hoje até agora × mesmo horário do mesmo dia da semana passada.
+    const decorrido = Math.min(agora.getTime(), amanha.getTime()) - inicio.getTime()
+    const [[ritmo]] = await pool.query<RowDataPacket[]>(
+      `select
        coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as hoje,
        coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as semana_passada
      from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ?`,
-    [
-      inicio,
-      agora,
-      new Date(inicio.getTime() - 7 * DIA),
-      new Date(inicio.getTime() - 7 * DIA + decorrido),
-      padariaId,
-      new Date(inicio.getTime() - 7 * DIA),
-    ],
-  )
-  const vendidoHoje = Number(ritmo.hoje)
-  const passado = Number(ritmo.semana_passada)
-  if (gestao && passado > 0 && vendidoHoje > 0) {
-    const variacao = (vendidoHoje - passado) / passado
-    if (Math.abs(variacao) >= 0.1) {
+      [
+        inicio,
+        agora,
+        new Date(inicio.getTime() - 7 * DIA),
+        new Date(inicio.getTime() - 7 * DIA + decorrido),
+        padariaId,
+        new Date(inicio.getTime() - 7 * DIA),
+      ],
+    )
+    const vendidoHoje = Number(ritmo.hoje)
+    const passado = Number(ritmo.semana_passada)
+    if (gestao && passado > 0 && vendidoHoje > 0) {
+      const variacao = (vendidoHoje - passado) / passado
+      if (Math.abs(variacao) >= 0.1) {
+        r.push({
+          id: 'ritmo',
+          tom: variacao > 0 ? 'boa' : 'atencao',
+          icone: variacao > 0 ? 'up' : 'down',
+          titulo:
+            variacao > 0
+              ? `Vendas ${Math.round(variacao * 100)}% acima da semana passada`
+              : `Vendas ${Math.round(-variacao * 100)}% abaixo da semana passada`,
+          texto: `Até agora: ${brl(vendidoHoje)} contra ${brl(passado)} no mesmo horário.${variacao < 0 ? ' Vale uma promoção no balcão ou um aviso no WhatsApp.' : ''}`,
+          peso: 50,
+          gestao: true,
+        })
+      }
+    }
+
+    // 7. Meta do dia da padaria.
+    const metas = await lerMetas(padariaId)
+    const metaDia = metas.get('geral')?.dia
+    if (gestao && metaDia) {
+      const falta = metaDia - vendidoHoje
       r.push({
-        id: 'ritmo',
-        tom: variacao > 0 ? 'boa' : 'atencao',
-        icone: variacao > 0 ? 'up' : 'down',
-        titulo:
-          variacao > 0
-            ? `Vendas ${Math.round(variacao * 100)}% acima da semana passada`
-            : `Vendas ${Math.round(-variacao * 100)}% abaixo da semana passada`,
-        texto: `Até agora: ${brl(vendidoHoje)} contra ${brl(passado)} no mesmo horário.${variacao < 0 ? ' Vale uma promoção no balcão ou um aviso no WhatsApp.' : ''}`,
-        peso: 50,
+        id: 'meta',
+        tom: falta <= 0 ? 'boa' : 'oportunidade',
+        icone: 'target',
+        titulo: falta <= 0 ? 'Meta do dia batida! 🎉' : `Faltam ${brl(falta)} para a meta do dia`,
+        texto:
+          falta <= 0
+            ? `Já são ${brl(vendidoHoje)} de ${brl(metaDia)}.`
+            : `${Math.round((vendidoHoje / metaDia) * 100)}% de ${brl(metaDia)}.`,
+        link: '/metas',
+        acao: 'Ver metas',
+        peso: falta <= 0 ? 40 : 55,
         gestao: true,
       })
     }
   }
 
-  // 7. Meta do dia da padaria.
-  const metas = await lerMetas(padariaId)
-  const metaDia = metas.get('geral')?.dia
-  if (gestao && metaDia) {
-    const falta = metaDia - vendidoHoje
-    r.push({
-      id: 'meta',
-      tom: falta <= 0 ? 'boa' : 'oportunidade',
-      icone: 'target',
-      titulo: falta <= 0 ? 'Meta do dia batida! 🎉' : `Faltam ${brl(falta)} para a meta do dia`,
-      texto:
-        falta <= 0
-          ? `Já são ${brl(vendidoHoje)} de ${brl(metaDia)}.`
-          : `${Math.round((vendidoHoje / metaDia) * 100)}% de ${brl(metaDia)}.`,
-      link: '/metas',
-      acao: 'Ver metas',
-      peso: falta <= 0 ? 40 : 55,
-      gestao: true,
-    })
-  }
-
-  // 8. Contas vencidas e vencendo hoje/amanhã.
-  if (gestao) {
+  const contas = async () => {
+    if (!gestao) return
     const [contas] = await pool.query<RowDataPacket[]>(
       `select tipo, descricao, valor, data_vencimento from contas_financeiras
        where padaria_id = ? and status = 'pendente' and data_vencimento <= ?
@@ -270,7 +297,10 @@ recomendacoesRouter.get('/', async (req, res) => {
         gestao: true,
       })
     }
+  }
 
+  const caixaEsquecido = async () => {
+    if (!gestao) return
     // 9. Caixa esquecido aberto desde um dia anterior.
     const [esquecidos] = await pool.query<RowDataPacket[]>(
       `select u.nome from caixas c join usuarios u on u.id = c.operador_id
@@ -290,7 +320,10 @@ recomendacoesRouter.get('/', async (req, res) => {
         gestao: true,
       })
     }
+  }
 
+  const pico = async () => {
+    if (!gestao) return
     // 10. Horário de pico das últimas 4 semanas neste dia da semana.
     const [horas] = await pool.query<RowDataPacket[]>(
       // epoch = instante real em segundos (sem fuso); 1/1/1970 foi quinta-feira.
@@ -299,7 +332,14 @@ recomendacoesRouter.get('/', async (req, res) => {
          and created_at >= ? and created_at < ?
          and mod((floor((extract(epoch from created_at) - ?) / 86400) + 3)::numeric, 7) = ?
        group by hora order by vendas desc limit 1`,
-      [tz * 60, padariaId, new Date(inicio.getTime() - 28 * DIA), inicio, tz * 60, (new Date(inicio.getTime() + 12 * 3600e3).getUTCDay() + 6) % 7],
+      [
+        tz * 60,
+        padariaId,
+        new Date(inicio.getTime() - 28 * DIA),
+        inicio,
+        tz * 60,
+        (new Date(inicio.getTime() + 12 * 3600e3).getUTCDay() + 6) % 7,
+      ],
     )
     if (horas[0] && Number(horas[0].vendas) >= 5) {
       const h = Number(horas[0].hora)
@@ -313,7 +353,10 @@ recomendacoesRouter.get('/', async (req, res) => {
         gestao: true,
       })
     }
+  }
 
+  const campeaoEParados = async () => {
+    if (!gestao) return
     // 11. Campeão de vendas da semana e produto parado com estoque.
     const [campeao] = await pool.query<RowDataPacket[]>(
       `select p.nome, sum(i.subtotal) as total from vendas_itens i
@@ -355,6 +398,19 @@ recomendacoesRouter.get('/', async (req, res) => {
       })
     }
   }
+
+  await Promise.all([
+    estoque(),
+    encomendasDoDia(),
+    producao(),
+    perdas(),
+    precos(),
+    ritmoEMeta(),
+    contas(),
+    caixaEsquecido(),
+    pico(),
+    campeaoEParados(),
+  ])
 
   res.json(
     r

@@ -80,37 +80,40 @@ perdasRouter.get('/perdas', async (req, res) => {
   const desde = lerData(req.query.desde)
   const ate = lerData(req.query.ate)
   const padariaId: string = res.locals.padariaId
-  const [lista] = await pool.query<RowDataPacket[]>(
-    `select pe.id, pe.produto_id, p.nome, p.unidade, p.categoria, pe.quantidade, pe.motivo,
-            pe.observacao, pe.custo_unitario, pe.created_at, u.nome as registrado_por
-     from perdas pe
-     join produtos p on p.id = pe.produto_id
-     left join usuarios u on u.id = pe.created_by
-     where pe.padaria_id = ? and pe.created_at >= ? and pe.created_at < ?
-     order by pe.created_at desc
-     limit 300`,
-    [padariaId, desde, ate],
-  )
-  const [porProduto] = await pool.query<RowDataPacket[]>(
-    `select p.id, p.nome, p.unidade, p.categoria,
-            coalesce(sum(pe.quantidade), 0) as perdido,
-            coalesce(sum(pe.quantidade * pe.custo_unitario), 0) as custo,
-            (select coalesce(sum(i.quantidade), 0) from vendas_itens i
-               join vendas v on v.id = i.venda_id
-              where i.produto_id = p.id and v.padaria_id = ? and v.status <> 'devolvida'
-                and v.created_at >= ? and v.created_at < ?) as vendido
-     from perdas pe join produtos p on p.id = pe.produto_id
-     where pe.padaria_id = ? and pe.created_at >= ? and pe.created_at < ?
-     group by p.id, p.nome, p.unidade, p.categoria
-     order by custo desc`,
-    [padariaId, desde, ate, padariaId, desde, ate],
-  )
-  const [porMotivo] = await pool.query<RowDataPacket[]>(
-    `select motivo, coalesce(sum(quantidade * custo_unitario), 0) as custo, count(*) as registros
-     from perdas where padaria_id = ? and created_at >= ? and created_at < ?
-     group by motivo order by custo desc`,
-    [padariaId, desde, ate],
-  )
+  // As três consultas ao mesmo tempo.
+  const [[lista], [porProduto], [porMotivo]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select pe.id, pe.produto_id, p.nome, p.unidade, p.categoria, pe.quantidade, pe.motivo,
+              pe.observacao, pe.custo_unitario, pe.created_at, u.nome as registrado_por
+       from perdas pe
+       join produtos p on p.id = pe.produto_id
+       left join usuarios u on u.id = pe.created_by
+       where pe.padaria_id = ? and pe.created_at >= ? and pe.created_at < ?
+       order by pe.created_at desc
+       limit 300`,
+      [padariaId, desde, ate],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select p.id, p.nome, p.unidade, p.categoria,
+              coalesce(sum(pe.quantidade), 0) as perdido,
+              coalesce(sum(pe.quantidade * pe.custo_unitario), 0) as custo,
+              (select coalesce(sum(i.quantidade), 0) from vendas_itens i
+                 join vendas v on v.id = i.venda_id
+                where i.produto_id = p.id and v.padaria_id = ? and v.status <> 'devolvida'
+                  and v.created_at >= ? and v.created_at < ?) as vendido
+       from perdas pe join produtos p on p.id = pe.produto_id
+       where pe.padaria_id = ? and pe.created_at >= ? and pe.created_at < ?
+       group by p.id, p.nome, p.unidade, p.categoria
+       order by custo desc`,
+      [padariaId, desde, ate, padariaId, desde, ate],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select motivo, coalesce(sum(quantidade * custo_unitario), 0) as custo, count(*) as registros
+       from perdas where padaria_id = ? and created_at >= ? and created_at < ?
+       group by motivo order by custo desc`,
+      [padariaId, desde, ate],
+    ),
+  ])
   const produtos = porProduto.map((r) => {
     const perdido = Number(r.perdido)
     const vendido = Number(r.vendido)
@@ -189,35 +192,38 @@ export async function calcularSugestao(padariaId: string, inicio: Date) {
         `coalesce(sum(case when v.created_at >= ? and v.created_at < ? then i.quantidade end), 0) as v${k}`,
     )
     .join(', ')
-  const [vendas] = await pool.query<RowDataPacket[]>(
-    `select i.produto_id, ${colunas}
-     from vendas_itens i join vendas v on v.id = i.venda_id
-     where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
-     group by i.produto_id`,
-    [...janelas.flatMap((j) => [j.de, j.ate]), padariaId, janelas.at(-1)!.de, janelas[0].ate],
-  )
   const colunasPerda = janelas
     .map(
       (_, k) =>
         `coalesce(sum(case when created_at >= ? and created_at < ? then quantidade end), 0) as p${k}`,
     )
     .join(', ')
-  const [perdas] = await pool.query<RowDataPacket[]>(
-    `select produto_id, ${colunasPerda} from perdas
-     where padaria_id = ? and created_at >= ? and created_at < ?
-     group by produto_id`,
-    [...janelas.flatMap((j) => [j.de, j.ate]), padariaId, janelas.at(-1)!.de, janelas[0].ate],
-  )
-  const [produtos] = await pool.query<RowDataPacket[]>(
-    `select p.id, p.nome, p.unidade, p.categoria, p.estoque_atual, p.created_at,
-            r.id as receita_id, r.nome as receita_nome, r.rendimento
-     from produtos p
-     left join receitas r on r.id = (
-       select r2.id from receitas r2 where r2.produto_id = p.id and r2.padaria_id = p.padaria_id
-       order by r2.created_at limit 1)
-     where p.padaria_id = ? and p.ativo = true`,
-    [padariaId],
-  )
+  // Vendas, sobras e produtos ao mesmo tempo.
+  const [[vendas], [perdas], [produtos]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select i.produto_id, ${colunas}
+       from vendas_itens i join vendas v on v.id = i.venda_id
+       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
+       group by i.produto_id`,
+      [...janelas.flatMap((j) => [j.de, j.ate]), padariaId, janelas.at(-1)!.de, janelas[0].ate],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select produto_id, ${colunasPerda} from perdas
+       where padaria_id = ? and created_at >= ? and created_at < ?
+       group by produto_id`,
+      [...janelas.flatMap((j) => [j.de, j.ate]), padariaId, janelas.at(-1)!.de, janelas[0].ate],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select p.id, p.nome, p.unidade, p.categoria, p.estoque_atual, p.created_at,
+              r.id as receita_id, r.nome as receita_nome, r.rendimento
+       from produtos p
+       left join receitas r on r.id = (
+         select r2.id from receitas r2 where r2.produto_id = p.id and r2.padaria_id = p.padaria_id
+         order by r2.created_at limit 1)
+       where p.padaria_id = ? and p.ativo = true`,
+      [padariaId],
+    ),
+  ])
   const perdaPor = new Map(perdas.map((p) => [p.produto_id, p]))
   const vendaPor = new Map(vendas.map((v) => [v.produto_id, v]))
 
@@ -239,7 +245,8 @@ export async function calcularSugestao(padariaId: string, inicio: Date) {
     if (pesoTotal === 0) continue
     const mediaVendida = vendido / pesoTotal
     const mediaPerdida = perdido / pesoTotal
-    const taxaSobra = mediaVendida + mediaPerdida > 0 ? mediaPerdida / (mediaVendida + mediaPerdida) : 0
+    const taxaSobra =
+      mediaVendida + mediaPerdida > 0 ? mediaPerdida / (mediaVendida + mediaPerdida) : 0
     const folga = taxaSobra < 0.05 ? 0.1 : taxaSobra > 0.15 ? 0 : 0.05
     const estoque = Math.max(0, Number(p.estoque_atual))
     const inteiro = p.unidade === 'un'

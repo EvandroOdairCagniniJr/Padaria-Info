@@ -18,7 +18,11 @@ const nomesDia = ['domingo', 'segunda', 'terça', 'quarta', 'quinta', 'sexta', '
 // [início, fim) do período atual e do anterior equivalente, no relógio da padaria.
 function periodos(tipo: 'dia' | 'semana' | 'mes', hoje: Date) {
   if (tipo === 'dia') {
-    return { de: hoje, ate: new Date(hoje.getTime() + DIA), antDe: new Date(hoje.getTime() - 7 * DIA) }
+    return {
+      de: hoje,
+      ate: new Date(hoje.getTime() + DIA),
+      antDe: new Date(hoje.getTime() - 7 * DIA),
+    }
   }
   if (tipo === 'semana') {
     // Semana de segunda a domingo; hoje + 12h evita erro de fuso ao achar o dia da semana.
@@ -58,39 +62,72 @@ analiseRouter.get('/', async (req, res) => {
   const antAte = new Date(antDe.getTime() + decorrido)
   // Dia: compara com o mesmo dia da semana passada.
   const rotuloAnterior =
-    q.periodo === 'dia' ? 'mesmo dia da semana passada' : q.periodo === 'semana' ? 'semana passada' : 'mês passado'
+    q.periodo === 'dia'
+      ? 'mesmo dia da semana passada'
+      : q.periodo === 'semana'
+        ? 'semana passada'
+        : 'mês passado'
   // "acima da semana passada", "contra 15 na semana passada".
   const daAnterior = `${q.periodo === 'semana' ? 'da' : 'do'} ${rotuloAnterior}`
   const naAnterior = `${q.periodo === 'semana' ? 'na' : 'no'} ${rotuloAnterior}`
 
-  const [[tot]] = await pool.query<RowDataPacket[]>(
-    `select
-       sum(case when created_at >= ? and created_at < ? then 1 else 0 end) as vendas,
-       coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as faturamento,
-       sum(case when created_at >= ? and created_at < ? then 1 else 0 end) as vendas_ant,
-       coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as faturamento_ant
-     from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ?`,
-    [de, ate, de, ate, antDe, antAte, antDe, antAte, padariaId, antDe],
-  )
+  const offset = q.tz * 60
+  // Totais, produtos, linha do tempo e pares comprados juntos ao mesmo tempo.
+  const [[[tot]], [prods], [tempo], [pares]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select
+         sum(case when created_at >= ? and created_at < ? then 1 else 0 end) as vendas,
+         coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as faturamento,
+         sum(case when created_at >= ? and created_at < ? then 1 else 0 end) as vendas_ant,
+         coalesce(sum(case when created_at >= ? and created_at < ? then total end), 0) as faturamento_ant
+       from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ?`,
+      [de, ate, de, ate, antDe, antAte, antDe, antAte, padariaId, antDe],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select p.id, p.nome, p.categoria, p.unidade,
+         coalesce(sum(case when v.created_at >= ? then i.quantidade end), 0) as quantidade,
+         coalesce(sum(case when v.created_at >= ? then i.subtotal end), 0) as faturamento,
+         coalesce(sum(case when v.created_at < ? then i.quantidade end), 0) as quantidade_ant,
+         count(distinct case when v.created_at >= ? then v.id end) as vendas
+       from vendas_itens i
+       join vendas v on v.id = i.venda_id
+       join produtos p on p.id = i.produto_id
+       where v.padaria_id = ? and v.status <> 'devolvida'
+         and ((v.created_at >= ? and v.created_at < ?) or (v.created_at >= ? and v.created_at < ?))
+       group by p.id, p.nome, p.categoria, p.unidade`,
+      [de, de, de, de, padariaId, de, ate, antDe, antAte],
+    ),
+    pool.query<RowDataPacket[]>(
+      q.periodo === 'dia'
+        ? `select floor(mod((extract(epoch from created_at) - ?)::numeric, 86400) / 3600) as chave,
+                  count(*) as vendas, sum(total) as faturamento
+           from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
+           group by chave order by chave`
+        : `select floor((extract(epoch from created_at) - ?) / 86400) as chave,
+                  count(*) as vendas, sum(total) as faturamento
+           from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
+           group by chave order by chave`,
+      [offset, padariaId, de, ate],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select a.produto_id as a, b.produto_id as b, pa.nome as nome_a, pb.nome as nome_b, count(*) as vezes
+       from vendas_itens a
+       join vendas_itens b on b.venda_id = a.venda_id and a.produto_id < b.produto_id
+       join vendas v on v.id = a.venda_id
+       join produtos pa on pa.id = a.produto_id
+       join produtos pb on pb.id = b.produto_id
+       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
+       group by a.produto_id, b.produto_id, pa.nome, pb.nome
+       having count(*) >= 2
+       order by vezes desc limit 5`,
+      [padariaId, de, ate],
+    ),
+  ])
   const vendas = Number(tot.vendas ?? 0)
   const faturamento = Number(tot.faturamento)
   const vendasAnt = Number(tot.vendas_ant ?? 0)
   const faturamentoAnt = Number(tot.faturamento_ant)
 
-  const [prods] = await pool.query<RowDataPacket[]>(
-    `select p.id, p.nome, p.categoria, p.unidade,
-       coalesce(sum(case when v.created_at >= ? then i.quantidade end), 0) as quantidade,
-       coalesce(sum(case when v.created_at >= ? then i.subtotal end), 0) as faturamento,
-       coalesce(sum(case when v.created_at < ? then i.quantidade end), 0) as quantidade_ant,
-       count(distinct case when v.created_at >= ? then v.id end) as vendas
-     from vendas_itens i
-     join vendas v on v.id = i.venda_id
-     join produtos p on p.id = i.produto_id
-     where v.padaria_id = ? and v.status <> 'devolvida'
-       and ((v.created_at >= ? and v.created_at < ?) or (v.created_at >= ? and v.created_at < ?))
-     group by p.id, p.nome, p.categoria, p.unidade`,
-    [de, de, de, de, padariaId, de, ate, antDe, antAte],
-  )
   const produtos = prods
     .map((r) => {
       const quantidade = Number(r.quantidade)
@@ -109,23 +146,12 @@ analiseRouter.get('/', async (req, res) => {
       }
     })
     .filter((r) => r.quantidade > 0 || r.quantidade_anterior > 0)
-  const ranking = produtos.filter((r) => r.quantidade > 0).sort((a, b) => b.faturamento - a.faturamento)
+  const ranking = produtos
+    .filter((r) => r.quantidade > 0)
+    .sort((a, b) => b.faturamento - a.faturamento)
   const porQuantidade = [...ranking].sort((a, b) => b.quantidade - a.quantidade)
 
   // Linha do tempo: por hora no dia; por dia na semana e no mês (no fuso da padaria).
-  const offset = q.tz * 60
-  const [tempo] = await pool.query<RowDataPacket[]>(
-    q.periodo === 'dia'
-      ? `select floor(mod((extract(epoch from created_at) - ?)::numeric, 86400) / 3600) as chave,
-                count(*) as vendas, sum(total) as faturamento
-         from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
-         group by chave order by chave`
-      : `select floor((extract(epoch from created_at) - ?) / 86400) as chave,
-                count(*) as vendas, sum(total) as faturamento
-         from vendas where padaria_id = ? and status <> 'devolvida' and created_at >= ? and created_at < ?
-         group by chave order by chave`,
-    [offset, padariaId, de, ate],
-  )
   const linhaTempo = tempo.map((t) => {
     const chave = Number(t.chave)
     // Dia: chave = hora; semana/mês: dias desde 1970 → data local (meio-dia UTC daquele dia).
@@ -150,19 +176,6 @@ analiseRouter.get('/', async (req, res) => {
   }
 
   // Comprados juntos: pares de produtos que mais aparecem na mesma venda do período.
-  const [pares] = await pool.query<RowDataPacket[]>(
-    `select a.produto_id as a, b.produto_id as b, pa.nome as nome_a, pb.nome as nome_b, count(*) as vezes
-     from vendas_itens a
-     join vendas_itens b on b.venda_id = a.venda_id and a.produto_id < b.produto_id
-     join vendas v on v.id = a.venda_id
-     join produtos pa on pa.id = a.produto_id
-     join produtos pb on pb.id = b.produto_id
-     where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
-     group by a.produto_id, b.produto_id, pa.nome, pb.nome
-     having count(*) >= 2
-     order by vezes desc limit 5`,
-    [padariaId, de, ate],
-  )
   const juntos = pares.map((x) => ({ produtos: [x.nome_a, x.nome_b], vezes: Number(x.vezes) }))
 
   // Recomendações de venda do período.
@@ -174,7 +187,10 @@ analiseRouter.get('/', async (req, res) => {
     if (Math.abs(v) >= 0.05) {
       rec.push({
         tom: v > 0 ? 'boa' : 'atencao',
-        titulo: v > 0 ? `Faturamento ${pct(v)} acima ${daAnterior}` : `Faturamento ${pct(v)} abaixo ${daAnterior}`,
+        titulo:
+          v > 0
+            ? `Faturamento ${pct(v)} acima ${daAnterior}`
+            : `Faturamento ${pct(v)} abaixo ${daAnterior}`,
         texto: `${brl(faturamento)} contra ${brl(faturamentoAnt)} no mesmo ponto.${v < 0 ? ' Movimente o balcão: promoção do dia, aviso no WhatsApp ou fornada extra no horário de pico.' : ''}`,
       })
     }
@@ -217,7 +233,8 @@ analiseRouter.get('/', async (req, res) => {
     rec.push({
       tom: 'oportunidade',
       titulo: `${ranking[0].nome} é ${pct(ranking[0].participacao)} do faturamento`,
-      texto: 'Seu carro-chefe. Cuide da qualidade e do horário das fornadas; aproveite para vender junto um item de maior margem.',
+      texto:
+        'Seu carro-chefe. Cuide da qualidade e do horário das fornadas; aproveite para vender junto um item de maior margem.',
     })
   }
   if (q.periodo === 'dia' && linhaTempo.length >= 3) {
@@ -252,7 +269,11 @@ analiseRouter.get('/', async (req, res) => {
     por_quantidade: porQuantidade.slice(0, 15),
     linha_tempo: linhaTempo,
     categorias: [...categorias.entries()]
-      .map(([nome, valor]) => ({ nome, faturamento: valor, participacao: faturamento ? valor / faturamento : 0 }))
+      .map(([nome, valor]) => ({
+        nome,
+        faturamento: valor,
+        participacao: faturamento ? valor / faturamento : 0,
+      }))
       .sort((a, b) => b.faturamento - a.faturamento),
     juntos,
     recomendacoes: rec,

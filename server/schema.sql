@@ -50,6 +50,7 @@ create table if not exists usuarios (
   created_at timestamptz not null default now()
 );
 create index if not exists usuarios_padaria_idx on usuarios (padaria_id);
+create index if not exists usuarios_cpf_idx on usuarios (cpf) where cpf is not null;
 
 create table if not exists produtos (
   id text primary key,
@@ -82,6 +83,7 @@ create table if not exists movimentacoes_estoque (
 );
 create index if not exists movimentacoes_padaria_idx on movimentacoes_estoque (padaria_id, created_at);
 create index if not exists movimentacoes_created_by_idx on movimentacoes_estoque (created_by, created_at);
+create index if not exists movimentacoes_produto_idx on movimentacoes_estoque (produto_id);
 
 -- Caixa (gaveta) de cada operador: abertura com fundo de troco, sangrias/suprimentos e fechamento.
 create table if not exists caixas (
@@ -164,6 +166,7 @@ create table if not exists receitas (
   created_at timestamptz not null default now()
 );
 create index if not exists receitas_padaria_idx on receitas (padaria_id);
+create index if not exists receitas_produto_idx on receitas (produto_id);
 
 create table if not exists receita_itens (
   id text primary key,
@@ -172,6 +175,7 @@ create table if not exists receita_itens (
   quantidade numeric(10, 3) not null check (quantidade > 0)
 );
 create index if not exists receita_itens_receita_idx on receita_itens (receita_id);
+create index if not exists receita_itens_ingrediente_idx on receita_itens (ingrediente_id);
 
 create table if not exists producoes (
   id text primary key,
@@ -186,6 +190,8 @@ create table if not exists producoes (
   concluida_por text references usuarios (id)
 );
 create index if not exists producoes_padaria_idx on producoes (padaria_id, data);
+create index if not exists producoes_receita_idx on producoes (receita_id);
+create index if not exists producoes_concluida_por_idx on producoes (concluida_por, concluida_em);
 
 -- Configurações por padaria (ex.: meta de CMV).
 create table if not exists padaria_config (
@@ -215,6 +221,7 @@ create table if not exists historico_perfil (
   created_at timestamptz not null default now()
 );
 create index if not exists historico_perfil_padaria_idx on historico_perfil (padaria_id, created_at);
+create index if not exists historico_perfil_usuario_idx on historico_perfil (usuario_id);
 
 -- Esqueci minha senha: código de 6 dígitos (só o hash), 15 minutos, poucas tentativas.
 create table if not exists codigos_senha (
@@ -247,6 +254,7 @@ create table if not exists perdas (
   created_at timestamptz not null default now()
 );
 create index if not exists perdas_padaria_data_idx on perdas (padaria_id, created_at);
+create index if not exists perdas_produto_idx on perdas (produto_id);
 
 -- Encomendas: número sequencial por padaria, sinal e status. Ao entregar vira venda (venda_id).
 create table if not exists encomendas (
@@ -272,6 +280,7 @@ create table if not exists encomendas (
 );
 create index if not exists encomendas_retirada_idx on encomendas (padaria_id, retirada_em);
 create index if not exists encomendas_venda_idx on encomendas (venda_id);
+create index if not exists encomendas_caixa_sinal_idx on encomendas (caixa_sinal_id) where caixa_sinal_id is not null;
 
 create table if not exists encomendas_itens (
   id text primary key,
@@ -281,6 +290,8 @@ create table if not exists encomendas_itens (
   preco_unitario numeric(10, 2) not null check (preco_unitario >= 0),
   subtotal numeric(10, 2) not null
 );
+create index if not exists encomendas_itens_encomenda_idx on encomendas_itens (encomenda_id);
+create index if not exists encomendas_itens_produto_idx on encomendas_itens (produto_id);
 
 create table if not exists caixa_movimentos (
   id text primary key,
@@ -292,6 +303,7 @@ create table if not exists caixa_movimentos (
   created_by text,
   created_at timestamptz not null default now()
 );
+create index if not exists caixa_movimentos_caixa_idx on caixa_movimentos (caixa_id);
 
 -- Promoções automáticas: %, R$ por unidade, preço fixo ou leve X pague Y; com período,
 -- dias da semana (0 = domingo) e horário.

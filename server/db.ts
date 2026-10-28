@@ -23,7 +23,13 @@ const pgPool = new pg.Pool({
   max: Number(process.env.DATABASE_POOL ?? 10),
   // Supabase exige SSL; DATABASE_SSL=false só para o banco local de testes.
   ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+  // Abrir conexão com o Supabase custa ~1 s (TLS + autenticação): as conexões ficam abertas
+  // por 10 min parado (o padrão era 10 s) e com keep-alive para a rede não derrubá-las.
+  idleTimeoutMillis: 10 * 60_000,
+  keepAlive: true,
 })
+// Conexão que caiu enquanto parada: só sai do pool (o pg abre outra na próxima consulta).
+pgPool.on('error', (err) => console.warn('Conexão com o banco caiu:', err.message))
 // Cada conexão trabalha no schema da aplicação (fora da API pública do Supabase). Configurado uma
 // vez por conexão, antes da primeira consulta. Use a conexão direta ou o "Session pooler".
 const configuradas = new WeakSet<pg.PoolClient>()
@@ -88,9 +94,12 @@ export const pool: PoolConnection = {
   },
 }
 
-// Cria o schema e as tabelas (server/schema.sql é idempotente).
+// Cria o schema e as tabelas (server/schema.sql é idempotente) e já deixa conexões abertas,
+// para a primeira tela não esperar a abertura delas.
 export async function initDatabase() {
   await pgPool.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
+  const prontas = await Promise.all(Array.from({ length: Math.min(4, pgPool.options.max ?? 4) }, conectar))
+  for (const c of prontas) c.release()
 }
 
 export function novoCodigoConvite() {

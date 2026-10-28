@@ -57,36 +57,42 @@ metasRouter.get('/', async (req, res) => {
   const padariaId: string = res.locals.padariaId
   const usuario = res.locals.usuario as Usuario
   const gestao = usuario.papel !== 'funcionario'
-  const metas = await lerMetas(padariaId)
+  // Metas lidas enquanto os totais são calculados.
+  const pMetas = lerMetas(padariaId)
 
   const somas = periodos
-    .map(
-      (p) => `coalesce(sum(case when v.created_at >= ? then v.total end), 0) as vendido_${p}`,
-    )
+    .map((p) => `coalesce(sum(case when v.created_at >= ? then v.total end), 0) as vendido_${p}`)
     .join(', ')
   const datas = periodos.map((p) => inicios[p])
   const menor = new Date(Math.min(...datas.map((d) => d.getTime())))
 
-  const [[geral]] = await pool.query<RowDataPacket[]>(
-    `select ${somas} from vendas v
-     where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ?`,
-    [...datas, padariaId, menor],
-  )
+  // Totais da padaria e de cada pessoa ao mesmo tempo.
+  const [[[geral]], [pessoas]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select ${somas} from vendas v
+       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ?`,
+      [...datas, padariaId, menor],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select u.id, u.nome, u.cargo, u.foto, u.papel, ${somas}
+       from usuarios u
+       left join vendas v on v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?
+       where u.padaria_id = ? and u.ativo = true ${gestao ? '' : 'and u.id = ?'}
+       group by u.id, u.nome, u.cargo, u.foto, u.papel
+       order by u.nome`,
+      [...datas, menor, padariaId, ...(gestao ? [] : [usuario.id])],
+    ),
+  ])
+  const metas = await pMetas
   // Funcionário vê só a própria meta; dono e gerência veem a equipe toda.
-  const [pessoas] = await pool.query<RowDataPacket[]>(
-    `select u.id, u.nome, u.cargo, u.foto, u.papel, ${somas}
-     from usuarios u
-     left join vendas v on v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?
-     where u.padaria_id = ? and u.ativo = true ${gestao ? '' : 'and u.id = ?'}
-     group by u.id, u.nome, u.cargo, u.foto, u.papel
-     order by u.nome`,
-    [...datas, menor, padariaId, ...(gestao ? [] : [usuario.id])],
-  )
 
   const progresso = (meta: number | null, vendido: number) => ({ meta, vendido })
   res.json({
     geral: Object.fromEntries(
-      periodos.map((p) => [p, progresso(metas.get('geral')?.[p] ?? null, Number(geral[`vendido_${p}`]))]),
+      periodos.map((p) => [
+        p,
+        progresso(metas.get('geral')?.[p] ?? null, Number(geral[`vendido_${p}`])),
+      ]),
     ),
     padrao: metas.get('pessoa') ?? vazio(),
     membros: pessoas.map((u) => ({
@@ -97,13 +103,20 @@ metasRouter.get('/', async (req, res) => {
       papel: u.papel,
       individual: metas.get(u.id) ?? vazio(),
       ...Object.fromEntries(
-        periodos.map((p) => [p, progresso(metaDaPessoa(metas, u.id, p), Number(u[`vendido_${p}`]))]),
+        periodos.map((p) => [
+          p,
+          progresso(metaDaPessoa(metas, u.id, p), Number(u[`vendido_${p}`])),
+        ]),
       ),
     })),
   })
 })
 
-const valorSchema = z.number().positive('A meta precisa ser maior que zero').max(100_000_000).nullable()
+const valorSchema = z
+  .number()
+  .positive('A meta precisa ser maior que zero')
+  .max(100_000_000)
+  .nullable()
 
 // Dono define as metas de um alvo de uma vez; null remove a meta daquele período.
 metasRouter.put('/', exigirPapel('dono'), async (req, res) => {
@@ -142,9 +155,10 @@ metasRouter.put('/', exigirPapel('dono'), async (req, res) => {
   }
   // O padrão salvo aqui substitui a antiga meta diária única.
   if (m.alvo === 'pessoa') {
-    await pool.query("delete from padaria_config where padaria_id = ? and chave = 'meta_diaria_vendas'", [
-      padariaId,
-    ])
+    await pool.query(
+      "delete from padaria_config where padaria_id = ? and chave = 'meta_diaria_vendas'",
+      [padariaId],
+    )
   }
   res.status(204).end()
 })

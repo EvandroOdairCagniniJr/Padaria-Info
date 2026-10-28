@@ -17,24 +17,27 @@ const centavos = (v: number) => Math.round(v * 100) / 100
 
 // Custo unitário de cada produto da padaria: ficha técnica (ingredientes ÷ rendimento) ou cadastro.
 export async function custosDosProdutos(padariaId: string) {
-  const [produtos] = await pool.query<RowDataPacket[]>(
-    `select id, nome, categoria, unidade, preco_venda, preco_custo
-     from produtos where padaria_id = ? and ativo = true order by nome`,
-    [padariaId],
-  )
-  const [fichas] = await pool.query<RowDataPacket[]>(
-    `select r.produto_id, r.rendimento,
-            sum(i.quantidade * coalesce(ing.preco_custo, 0)) as custo_receita,
-            count(*) filter (where ing.preco_custo is null) as sem_custo
-     from receitas r
-     join receita_itens i on i.receita_id = r.id
-     join produtos ing on ing.id = i.ingrediente_id
-     where r.padaria_id = ?
-       and r.id = (select r2.id from receitas r2 where r2.produto_id = r.produto_id
-                   order by r2.created_at limit 1)
-     group by r.id, r.produto_id, r.rendimento`,
-    [padariaId],
-  )
+  // Produtos e fichas técnicas ao mesmo tempo.
+  const [[produtos], [fichas]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select id, nome, categoria, unidade, preco_venda, preco_custo
+       from produtos where padaria_id = ? and ativo = true order by nome`,
+      [padariaId],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select r.produto_id, r.rendimento,
+              sum(i.quantidade * coalesce(ing.preco_custo, 0)) as custo_receita,
+              count(*) filter (where ing.preco_custo is null) as sem_custo
+       from receitas r
+       join receita_itens i on i.receita_id = r.id
+       join produtos ing on ing.id = i.ingrediente_id
+       where r.padaria_id = ?
+         and r.id = (select r2.id from receitas r2 where r2.produto_id = r.produto_id
+                     order by r2.created_at limit 1)
+       group by r.id, r.produto_id, r.rendimento`,
+      [padariaId],
+    ),
+  ])
   const porProduto = new Map(fichas.map((f) => [f.produto_id, f]))
   return produtos.map((p) => {
     const ficha = porProduto.get(p.id)
@@ -48,7 +51,8 @@ export async function custosDosProdutos(padariaId: string) {
       preco_venda: Number(p.preco_venda),
       preco_custo: p.preco_custo == null ? null : Number(p.preco_custo),
       custo: custo == null ? null : Math.round(custo * 10000) / 10000,
-      origem: custoFicha != null ? ('receita' as const) : custo != null ? ('cadastro' as const) : null,
+      origem:
+        custoFicha != null ? ('receita' as const) : custo != null ? ('cadastro' as const) : null,
       // Ficha com ingrediente sem custo cadastrado: o custo calculado fica por baixo.
       ficha_incompleta: Boolean(ficha && Number(ficha.sem_custo) > 0),
     }
@@ -61,15 +65,19 @@ margensRouter.get('/', async (req, res) => {
     req.query,
   )
   const padariaId: string = res.locals.padariaId
-  const cmvAlvo = Number(await lerConfig(padariaId, 'cmv_alvo', String(CMV_PADRAO)))
-  const custos = await custosDosProdutos(padariaId)
-  const [vendidos] = await pool.query<RowDataPacket[]>(
-    `select i.produto_id, sum(i.quantidade) as quantidade, sum(i.subtotal) as faturamento
-     from vendas_itens i join vendas v on v.id = i.venda_id
-     where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
-     group by i.produto_id`,
-    [padariaId, q.desde, q.ate],
-  )
+  // Meta de CMV, custos e vendas ao mesmo tempo.
+  const [cmvTexto, custos, [vendidos]] = await Promise.all([
+    lerConfig(padariaId, 'cmv_alvo', String(CMV_PADRAO)),
+    custosDosProdutos(padariaId),
+    pool.query<RowDataPacket[]>(
+      `select i.produto_id, sum(i.quantidade) as quantidade, sum(i.subtotal) as faturamento
+       from vendas_itens i join vendas v on v.id = i.venda_id
+       where v.padaria_id = ? and v.status <> 'devolvida' and v.created_at >= ? and v.created_at < ?
+       group by i.produto_id`,
+      [padariaId, q.desde, q.ate],
+    ),
+  ])
+  const cmvAlvo = Number(cmvTexto)
   const vendaPor = new Map(vendidos.map((v) => [v.produto_id, v]))
 
   let faturamento = 0

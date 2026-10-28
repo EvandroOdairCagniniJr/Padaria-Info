@@ -4,6 +4,7 @@ import { randomUUID } from 'node:crypto'
 import type { RowDataPacket } from './db.ts'
 import { transaction } from './db.ts'
 import { HttpError } from './http.ts'
+import { esquecerUsuario } from './cacheUsuarios.ts'
 
 // Papel antes do cargo: numa promoção com os dois, o cargo novo é o que vai para o selo.
 const camposRastreados = ['nome', 'papel', 'cargo', 'foto'] as const
@@ -33,6 +34,8 @@ export async function alterarPerfil(
   const entradas = Object.entries(mudancas).filter(([, v]) => v !== undefined)
   if (entradas.length === 0) return
 
+  // A pessoa mudou: o login dela é relido do banco na próxima requisição.
+  esquecerUsuario(usuarioId)
   await transaction(async (conn) => {
     const [rows] = await conn.query<RowDataPacket[]>(
       'select padaria_id, nome, cargo, papel, foto from usuarios where id = ? for update',
@@ -73,4 +76,5 @@ export async function alterarPerfil(
       )
     }
   })
+  esquecerUsuario(usuarioId)
 }

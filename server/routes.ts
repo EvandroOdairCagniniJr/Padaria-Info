@@ -164,20 +164,21 @@ export async function registrarMovimentacao(
   if (!(quantidade >= 0) || (tipo !== 'ajuste' && quantidade === 0)) {
     throw new HttpError(400, `Quantidade inválida: ${quantidade}`)
   }
+  // Estoque e histórico num comando só (uma ida ao banco em vez de duas).
   const [result] = await conn.query<RowDataPacket[] & { affectedRows: number }>(
-    `update produtos set estoque_atual = case ?
-       when 'entrada' then estoque_atual + ?
-       when 'saida' then estoque_atual - ?
-       else ? end
-     where id = ? and padaria_id = ?`,
-    [tipo, quantidade, quantidade, quantidade, produtoId, padaria],
+    `with alterado as (
+       update produtos set estoque_atual = case ?::text
+         when 'entrada' then estoque_atual + ?::numeric
+         when 'saida' then estoque_atual - ?::numeric
+         else ?::numeric end
+       where id = ? and padaria_id = ?
+       returning id
+     )
+     insert into movimentacoes_estoque (id, padaria_id, produto_id, tipo, quantidade, motivo, created_by)
+     select ?, ?, id, ?, ?, ?, ? from alterado`,
+    [tipo, quantidade, quantidade, quantidade, produtoId, padaria, randomUUID(), padaria, tipo, quantidade, motivo, userId],
   )
   if (result.affectedRows === 0) throw new HttpError(404, 'Produto não encontrado')
-  await conn.query(
-    `insert into movimentacoes_estoque (id, padaria_id, produto_id, tipo, quantidade, motivo, created_by)
-     values (?, ?, ?, ?, ?, ?, ?)`,
-    [randomUUID(), padaria, produtoId, tipo, quantidade, motivo, userId],
-  )
 }
 
 apiRouter.post('/estoque/movimentacoes', async (req, res) => {
@@ -394,21 +395,24 @@ apiRouter.post('/vendas', async (req, res) => {
   const papel = res.locals.usuario.papel as string
 
   const resultado = await transaction(async (conn) => {
+    // Todos os produtos da venda numa consulta só.
+    const [linhas] = await conn.query<RowDataPacket[]>(
+      `select id, preco_venda, categoria, unidade from produtos
+       where id in (?) and padaria_id = ? and ativo = true`,
+      [[...new Set(venda.itens.map((i) => i.produto_id))], padariaId(res)],
+    )
+    const porId = new Map(linhas.map((l) => [l.id as string, l]))
     const itens: ItemParaPromocao[] = []
     for (const item of venda.itens) {
       if (!(item.quantidade > 0)) throw new HttpError(400, 'Quantidade inválida em um dos itens')
-      const [rows] = await conn.query<RowDataPacket[]>(
-        `select preco_venda, categoria, unidade from produtos
-         where id = ? and padaria_id = ? and ativo = true`,
-        [item.produto_id, padariaId(res)],
-      )
-      if (!rows[0]) throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
+      const p = porId.get(item.produto_id)
+      if (!p) throw new HttpError(400, 'Um dos produtos não existe ou foi removido')
       itens.push({
         produto_id: item.produto_id,
-        categoria: rows[0].categoria,
-        unidade: rows[0].unidade,
+        categoria: p.categoria,
+        unidade: p.unidade,
         quantidade: item.quantidade,
-        preco: Number(rows[0].preco_venda),
+        preco: Number(p.preco_venda),
       })
     }
     const calculados = aplicarPromocoes(
@@ -467,13 +471,23 @@ apiRouter.post('/vendas', async (req, res) => {
         descontoManual,
       ],
     )
+    // Itens da venda num insert só.
+    await conn.query(
+      `insert into vendas_itens (id, venda_id, produto_id, quantidade, preco_unitario, subtotal,
+         desconto, promocao_id)
+       values ${finais.map(() => '(?, ?, ?, ?, ?, ?, ?, ?)').join(', ')}`,
+      finais.flatMap((i) => [
+        randomUUID(),
+        vendaId,
+        i.produto_id,
+        i.quantidade,
+        i.preco,
+        i.subtotal,
+        i.desconto,
+        i.promocao?.id ?? null,
+      ]),
+    )
     for (const i of finais) {
-      await conn.query(
-        `insert into vendas_itens (id, venda_id, produto_id, quantidade, preco_unitario, subtotal,
-           desconto, promocao_id)
-         values (?, ?, ?, ?, ?, ?, ?, ?)`,
-        [randomUUID(), vendaId, i.produto_id, i.quantidade, i.preco, i.subtotal, i.desconto, i.promocao?.id ?? null],
-      )
       await registrarMovimentacao(conn, padariaId(res), i.produto_id, 'saida', i.quantidade, 'venda', userId)
     }
     return {

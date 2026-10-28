@@ -29,33 +29,37 @@ const ultimaPromocao = `
 timeRouter.get('/', async (req, res) => {
   const desde = lerData(req.query.desde)
   const hoje = lerData(req.query.hoje)
-  const [rows] = await pool.query<RowDataPacket[]>(
-    `select u.id, u.nome, u.cargo, u.papel, u.foto, u.created_at,
-       (select count(*) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendas,
-       (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as total_vendas,
-       (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendido_hoje,
-       (select min(v.created_at) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as primeira_venda_hoje,
-       (select h.created_at ${ultimaPromocao}) as promovido_em,
-       (select concat(h.campo, ':', coalesce(h.valor_novo, '')) ${ultimaPromocao}) as promocao
-     from usuarios u
-     where u.padaria_id = ? and u.ativo = true
-     order by total_vendas desc, vendas desc, u.nome`,
-    [desde, desde, hoje, hoje, res.locals.padariaId],
-  )
+  const pMetas = lerMetas(res.locals.padariaId)
+  // Equipe e produtos vendidos ao mesmo tempo.
+  const [[rows], [itens]] = await Promise.all([
+    pool.query<RowDataPacket[]>(
+      `select u.id, u.nome, u.cargo, u.papel, u.foto, u.created_at,
+         (select count(*) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendas,
+         (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as total_vendas,
+         (select coalesce(sum(v.total), 0) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as vendido_hoje,
+         (select min(v.created_at) from vendas v where v.created_by = u.id and v.status <> 'devolvida' and v.created_at >= ?) as primeira_venda_hoje,
+         (select h.created_at ${ultimaPromocao}) as promovido_em,
+         (select concat(h.campo, ':', coalesce(h.valor_novo, '')) ${ultimaPromocao}) as promocao
+       from usuarios u
+       where u.padaria_id = ? and u.ativo = true
+       order by total_vendas desc, vendas desc, u.nome`,
+      [desde, desde, hoje, hoje, res.locals.padariaId],
+    ),
+    pool.query<RowDataPacket[]>(
+      `select v.created_by as usuario_id, p.nome, p.categoria,
+              sum(i.subtotal) as total, sum(i.quantidade) as quantidade
+       from vendas_itens i
+       join vendas v on v.id = i.venda_id
+       join produtos p on p.id = i.produto_id
+       where v.padaria_id = ? and v.created_at >= ? and v.created_by is not null
+         and v.status <> 'devolvida'
+       group by v.created_by, p.id, p.nome, p.categoria`,
+      [res.locals.padariaId, desde],
+    ),
+  ])
 
   // O que cada um vendeu no período, por produto: base dos adesivos por tipo
   // (doces, bebidas, pães...), que o navegador agrupa pela categoria/nome.
-  const [itens] = await pool.query<RowDataPacket[]>(
-    `select v.created_by as usuario_id, p.nome, p.categoria,
-            sum(i.subtotal) as total, sum(i.quantidade) as quantidade
-     from vendas_itens i
-     join vendas v on v.id = i.venda_id
-     join produtos p on p.id = i.produto_id
-     where v.padaria_id = ? and v.created_at >= ? and v.created_by is not null
-       and v.status <> 'devolvida'
-     group by v.created_by, p.id, p.nome, p.categoria`,
-    [res.locals.padariaId, desde],
-  )
   const produtosPorMembro = new Map<
     string,
     { nome: string; categoria: string | null; total: number; quantidade: number }[]
@@ -71,7 +75,7 @@ timeRouter.get('/', async (req, res) => {
     produtosPorMembro.set(i.usuario_id, lista)
   }
 
-  const metas = await lerMetas(res.locals.padariaId)
+  const metas = await pMetas
   let posicao = 0
   const membros = rows.map((r) => {
     const total = Number(r.total_vendas)

@@ -5,6 +5,9 @@ services:
     name: padaria-info
     runtime: node
     plan: free
+    # Mesma região do banco no Supabase (us-west-2, Oregon): cada consulta leva ~1 ms em vez de
+    # ~200 ms. Se o banco for para outra região, troque aqui também.
+    region: oregon
     # Com NODE_ENV=production o npm pula as devDependencies, que o build (vite/tsc) precisa.
     buildCommand: npm ci --include=dev && npm run build
     startCommand: node server/index.ts
