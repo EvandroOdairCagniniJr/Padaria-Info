@@ -1,4 +1,4 @@
-import { createHash, randomBytes, randomInt, randomUUID } from 'node:crypto'
+import { createHash, randomBytes, randomInt, randomUUID, timingSafeEqual } from 'node:crypto'
 import bcrypt from 'bcryptjs'
 import {
   Router,
@@ -76,6 +76,13 @@ const BLOQUEIO_MIN = 15
 // Hash qualquer: conta inexistente leva o mesmo tempo que senha errada (não revela e-mails).
 const HASH_FALSO = bcrypt.hashSync('senha-que-nao-existe', 10)
 
+// httpOnly: o JavaScript da página não lê o token (um script injetado não consegue roubá-lo).
+const opcoesCookie = { httpOnly: true, sameSite: 'lax', secure: producao, path: '/' } as const
+
+function sairDoAparelho(res: Response) {
+  res.clearCookie(COOKIE, opcoesCookie)
+}
+
 async function iniciarSessao(res: Response, usuario: Usuario) {
   // A versão da sessão vai no token: trocar a senha ou desativar invalida os tokens antigos.
   const [rows] = await pool.query<RowDataPacket[]>('select sessao_versao from usuarios where id = ?', [
@@ -85,12 +92,7 @@ async function iniciarSessao(res: Response, usuario: Usuario) {
     expiresIn: '7d',
   })
   // Em produção (HTTPS) o cookie só trafega criptografado.
-  res.cookie(COOKIE, token, {
-    httpOnly: true,
-    sameSite: 'lax',
-    secure: producao,
-    maxAge: SETE_DIAS_MS,
-  })
+  res.cookie(COOKIE, token, { ...opcoesCookie, maxAge: SETE_DIAS_MS })
   res.json(usuario)
 }
 
@@ -290,7 +292,7 @@ authRouter.post('/esqueci-senha', async (req, res) => {
         await enviarCodigoSenha(u.email, u.nome, codigo, padaria)
         await registrarAcesso(req, 'codigo_enviado', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
       } catch (err) {
-        console.error('Falha ao enviar o e-mail de recuperação:', err)
+        console.error('Falha ao enviar o e-mail de recuperação:', (err as Error).message)
         await pool.query('delete from codigos_senha where usuario_id = ?', [u.id])
         throw new HttpError(502, 'Não foi possível enviar o e-mail agora. Tente de novo em instantes.')
       }
@@ -310,7 +312,10 @@ async function conferirCodigo(email: string, codigo: string) {
   )
   const registro = rows[0]
   if (!registro) throw invalido
-  if (registro.codigo_hash !== hashCodigo(u.id, codigo)) {
+  // Comparação em tempo constante: o tempo da resposta não dá pistas sobre o código.
+  const certo = Buffer.from(String(registro.codigo_hash))
+  const informado = Buffer.from(hashCodigo(u.id, codigo))
+  if (certo.length !== informado.length || !timingSafeEqual(certo, informado)) {
     if (registro.tentativas + 1 >= MAX_TENTATIVAS) {
       await pool.query('delete from codigos_senha where usuario_id = ?', [u.id])
       throw new HttpError(429, 'Muitas tentativas erradas. Peça um novo código.')
@@ -349,7 +354,7 @@ authRouter.post('/codigo/entrar', async (req, res) => {
 })
 
 authRouter.post('/logout', (_req, res) => {
-  res.clearCookie(COOKIE)
+  sairDoAparelho(res)
   res.status(204).end()
 })
 
@@ -358,7 +363,7 @@ authRouter.post('/sair-de-todos', exigirLogin, async (req, res) => {
   const u = res.locals.usuario as Usuario
   await encerrarSessoes(u.id)
   await registrarAcesso(req, 'saiu_de_todos', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })
-  res.clearCookie(COOKIE)
+  sairDoAparelho(res)
   res.status(204).end()
 })
 

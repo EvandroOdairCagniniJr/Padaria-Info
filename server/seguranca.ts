@@ -18,7 +18,8 @@ export function cabecalhosSeguranca(_req: Request, res: Response, next: NextFunc
       "style-src 'self' 'unsafe-inline'",
       "img-src 'self' data: blob:",
       "font-src 'self' data:",
-      "connect-src 'self'",
+      // ViaCEP: busca do endereço pelo CEP no cadastro.
+      "connect-src 'self' https://viacep.com.br",
       "frame-ancestors 'none'",
       "base-uri 'self'",
       "form-action 'self'",
@@ -36,10 +37,25 @@ export function cabecalhosSeguranca(_req: Request, res: Response, next: NextFunc
   next()
 }
 
+// Respostas da API (vendas, equipe, CPF...) nunca ficam guardadas no cache do navegador nem de
+// proxies: no computador da padaria, quem usar depois não vê os dados de quem saiu.
+export function semCache(_req: Request, res: Response, next: NextFunction) {
+  res.setHeader('Cache-Control', 'no-store')
+  res.setHeader('Pragma', 'no-cache')
+  next()
+}
+
 // Ações (POST/PUT/PATCH/DELETE) só vindas do próprio site: outro site não consegue usar o login
 // de quem está com o sistema aberto (CSRF). Complementa o cookie SameSite.
 export function mesmaOrigem(req: Request, res: Response, next: NextFunction) {
   if (req.method === 'GET' || req.method === 'HEAD' || req.method === 'OPTIONS') return next()
+  // Corpo só em JSON: formulários de outros sites não conseguem enviar JSON sem a permissão do
+  // navegador (CORS), o que fecha mais uma porta de CSRF.
+  const temCorpo = Number(req.headers['content-length'] ?? 0) > 0 || req.headers['transfer-encoding']
+  if (temCorpo && !req.is('application/json')) {
+    res.status(415).json({ message: 'Formato de dados não aceito.' })
+    return
+  }
   const origem = req.headers.origin ?? req.headers.referer
   if (origem) {
     let host: string | null = null
@@ -85,6 +101,22 @@ export type EventoAcesso =
   | 'senha_alterada'
   | 'saiu_de_todos'
 
+// LGPD (necessidade e retenção): IP e navegador do registro de acessos ficam 1 ano; códigos de
+// senha vencidos somem. Roda ao ligar o servidor e a cada 24 h.
+export async function limparDadosAntigos() {
+  try {
+    await pool.query(`delete from log_acessos where created_at < now() - interval '1 year'`)
+    await pool.query('delete from codigos_senha where expira_em < now()')
+  } catch (err) {
+    console.error('Falha na limpeza de dados antigos:', (err as Error).message)
+  }
+}
+
+export function agendarLimpeza() {
+  void limparDadosAntigos()
+  setInterval(limparDadosAntigos, 24 * 60 * 60_000).unref()
+}
+
 // Registro de acessos (o dono vê em Equipe). Falha aqui nunca derruba o login.
 export async function registrarAcesso(
   req: Request,
@@ -106,6 +138,6 @@ export async function registrarAcesso(
       ],
     )
   } catch (err) {
-    console.error('Falha ao registrar acesso:', err)
+    console.error('Falha ao registrar acesso:', (err as Error).message)
   }
 }

@@ -21,8 +21,17 @@ if (!conexao) {
 const pgPool = new pg.Pool({
   connectionString: conexao ?? 'postgres://postgres@127.0.0.1:5432/postgres',
   max: Number(process.env.DATABASE_POOL ?? 10),
-  // Supabase exige SSL; DATABASE_SSL=false só para o banco local de testes.
-  ssl: process.env.DATABASE_SSL === 'false' ? false : { rejectUnauthorized: false },
+  // Conexão criptografada E verificada: só aceita o servidor com certificado assinado pela CA do
+  // Supabase (server/supabase-ca.crt, "Supabase Root 2021 CA"). Sem a verificação, alguém no meio
+  // do caminho poderia se passar pelo banco e ler senhas e dados. DATABASE_SSL=false só para o
+  // banco local de testes.
+  ssl:
+    process.env.DATABASE_SSL === 'false'
+      ? false
+      : {
+          ca: readFileSync(new URL('./supabase-ca.crt', import.meta.url), 'utf8'),
+          rejectUnauthorized: true,
+        },
   // Abrir conexão com o Supabase custa ~1 s (TLS + autenticação): as conexões ficam abertas
   // por 10 min parado (o padrão era 10 s) e com keep-alive para a rede não derrubá-las.
   idleTimeoutMillis: 10 * 60_000,

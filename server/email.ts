@@ -29,6 +29,10 @@ export async function enviarCodigoSenha(
   padaria: string,
 ) {
   if (!transporte) {
+    // Em produção o código NUNCA vai para o log (quem lê os logs entraria na conta de qualquer um).
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('SMTP não configurado: defina SMTP_HOST, SMTP_USER e SMTP_PASS.')
+    }
     console.warn(
       `\n[e-mail] SMTP não configurado no .env — código de recuperação de ${para}: ${codigo}\n`,
     )

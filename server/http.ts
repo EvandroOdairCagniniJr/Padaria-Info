@@ -35,7 +35,17 @@ export function errorHandler(err: unknown, _req: Request, res: Response, _next: 
     res.status(status).json({ message })
     return
   }
-  console.error(err)
+  // JSON malformado, corpo grande demais etc. (body-parser): erro de quem enviou, não do servidor.
+  const status = (err as { status?: number }).status
+  if (status && status >= 400 && status < 500) {
+    res.status(status).json({ message: status === 413 ? 'Dados grandes demais.' : 'Dados inválidos.' })
+    return
+  }
+  // No log só o essencial: o "detail" do PostgreSQL e o corpo da requisição podem trazer e-mail,
+  // CPF ou outros dados pessoais, que não devem ficar gravados nos logs.
+  const e = err as { name?: string; message?: string; code?: string; stack?: string }
+  console.error(`[erro] ${e.name ?? 'Error'}${e.code ? ` (${e.code})` : ''}: ${e.message ?? String(err)}`)
+  if (e.stack) console.error(e.stack.split('\n').slice(1, 6).join('\n'))
   res.status(500).json({ message: 'Erro interno no servidor.' })
 }
 

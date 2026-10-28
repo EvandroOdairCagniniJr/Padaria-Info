@@ -25,7 +25,9 @@ const { recomendacoesRouter } = await import('./recomendacoes.ts')
 const { analiseRouter } = await import('./analise.ts')
 const { promocoesRouter } = await import('./promocoes.ts')
 const { errorHandler } = await import('./http.ts')
-const { cabecalhosSeguranca, limiteGeral, mesmaOrigem } = await import('./seguranca.ts')
+const { agendarLimpeza, cabecalhosSeguranca, limiteGeral, mesmaOrigem, semCache } = await import(
+  './seguranca.ts'
+)
 const { assetsComprimidos } = await import('./estaticos.ts')
 
 const port = Number(process.env.PORT ?? 3000)
@@ -37,6 +39,7 @@ try {
   console.error('Confira o DATABASE_URL no arquivo .env (connection string do Supabase).\n')
   process.exit(1)
 }
+agendarLimpeza()
 
 const app = express()
 // Atrás do proxy do Render (HTTPS): IP real do cliente e cookie seguro.
@@ -46,14 +49,14 @@ app.disable('x-powered-by')
 app.use(cabecalhosSeguranca)
 app.use(compression())
 // Limite maior por causa das fotos da equipe (já reduzidas no navegador).
-app.use(express.json({ limit: '1mb' }))
+app.use(express.json({ limit: '1mb', strict: true }))
 app.use(cookieParser())
 
 // Verificação de saúde do Render (sem login).
 app.get('/api/saude', (_req, res) => {
   res.json({ ok: true })
 })
-app.use('/api', limiteGeral, mesmaOrigem)
+app.use('/api', semCache, limiteGeral, mesmaOrigem)
 app.use('/api/auth', authRouter)
 app.use('/api/equipe', exigirLogin, equipeRouter)
 app.use('/api/time', exigirLogin, timeRouter)

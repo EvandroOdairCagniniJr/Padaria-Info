@@ -149,14 +149,15 @@ export const dadosTrabalhoSchema = z.object({
   observacoes: texto(1000, 'Observações'),
 })
 
-// Um CPF só pode estar numa conta.
+// Um CPF só pode estar numa conta. A mensagem não diz de quem é: o cadastro é público e mostrar
+// o nome deixaria qualquer pessoa descobrir o titular de um CPF.
 export async function garantirCpfUnico(cpf: string | null | undefined, exceto?: string) {
   if (!cpf) return
   const [rows] = await pool.query<RowDataPacket[]>(
-    'select nome from usuarios where cpf = ? and id <> ? limit 1',
+    'select 1 from usuarios where cpf = ? and id <> ? limit 1',
     [cpf, exceto ?? ''],
   )
-  if (rows[0]) throw new HttpError(409, `Este CPF já está cadastrado para ${rows[0].nome}.`)
+  if (rows[0]) throw new HttpError(409, 'Este CPF já está cadastrado em outra conta.')
 }
 
 // ---------------------------------------------------------------- Padaria
