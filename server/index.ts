@@ -10,7 +10,7 @@ const { default: express } = await import('express')
 const { default: cookieParser } = await import('cookie-parser')
 const { default: compression } = await import('compression')
 // Importados depois do loadEnvFile: db.ts e auth.ts leem process.env ao carregar.
-const { initDatabase } = await import('./db.ts')
+const { initDatabase, pool } = await import('./db.ts')
 const { authRouter, exigirLogin } = await import('./auth.ts')
 const { apiRouter } = await import('./routes.ts')
 const { equipeRouter } = await import('./equipe.ts')
@@ -57,6 +57,16 @@ app.get('/api/saude', (_req, res) => {
   res.json({ ok: true })
 })
 app.use('/api', semCache, limiteGeral, mesmaOrigem)
+// "Cutucada" do GitHub Actions (.github/workflows/manter-acordado.yml): mantém o Render acordado
+// e faz uma consulta mínima no banco, para o Supabase grátis não pausar o projeto por inatividade.
+app.get('/api/saude/banco', async (_req, res) => {
+  try {
+    await pool.query('select 1')
+    res.json({ ok: true })
+  } catch {
+    res.status(503).json({ ok: false })
+  }
+})
 app.use('/api/auth', authRouter)
 app.use('/api/equipe', exigirLogin, equipeRouter)
 app.use('/api/time', exigirLogin, timeRouter)
