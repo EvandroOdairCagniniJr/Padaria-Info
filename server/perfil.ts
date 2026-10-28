@@ -26,6 +26,11 @@ export interface AlteracoesPerfil {
   observacoes?: string | null
 }
 
+const colunasEditaveis = new Set<string>([
+  'nome', 'cargo', 'papel', 'foto', 'ativo', 'senha_hash', 'telefone', 'cpf', 'data_nascimento',
+  'data_admissao', 'turno', 'endereco', 'contato_emergencia', 'observacoes',
+] satisfies (keyof AlteracoesPerfil)[])
+
 export async function alterarPerfil(
   usuarioId: string,
   alteradoPor: string,
@@ -33,6 +38,10 @@ export async function alterarPerfil(
 ) {
   const entradas = Object.entries(mudancas).filter(([, v]) => v !== undefined)
   if (entradas.length === 0) return
+  // Os nomes das colunas entram no SQL: só os desta lista fixa (defesa contra SQL injection
+  // mesmo se algum dia um objeto chegar aqui sem passar pela validação).
+  const invalida = entradas.find(([k]) => !colunasEditaveis.has(k))
+  if (invalida) throw new Error(`Campo de perfil não permitido: ${invalida[0]}`)
 
   // A pessoa mudou: o login dela é relido do banco na próxima requisição.
   esquecerUsuario(usuarioId)
