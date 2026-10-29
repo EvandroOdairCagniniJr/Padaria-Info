@@ -20,7 +20,9 @@ if (!conexao) {
 
 const pgPool = new pg.Pool({
   connectionString: conexao ?? 'postgres://postgres@127.0.0.1:5432/postgres',
-  max: Number(process.env.DATABASE_POOL ?? 10),
+  // O Supabase grátis aceita só 15 conexões no total ("pool_size: 15"). Num deploy, a versão velha
+  // e a nova ficam ligadas juntas por alguns segundos: 5 por servidor deixa folga para as duas.
+  max: Number(process.env.DATABASE_POOL ?? 5),
   // Conexão criptografada E verificada: só aceita o servidor com certificado assinado pela CA do
   // Supabase (server/supabase-ca.crt, "Supabase Root 2021 CA"). Sem a verificação, alguém no meio
   // do caminho poderia se passar pelo banco e ler senhas e dados. DATABASE_SSL=false só para o
@@ -32,9 +34,9 @@ const pgPool = new pg.Pool({
           ca: readFileSync(new URL('./supabase-ca.crt', import.meta.url), 'utf8'),
           rejectUnauthorized: true,
         },
-  // Abrir conexão com o Supabase custa ~1 s (TLS + autenticação): as conexões ficam abertas
-  // por 10 min parado (o padrão era 10 s) e com keep-alive para a rede não derrubá-las.
-  idleTimeoutMillis: 10 * 60_000,
+  // Conexão parada é devolvida ao Supabase depois de 1 min (o padrão do pg era 10 s; 10 min
+  // segurava vagas demais e travou um deploy). Keep-alive para a rede não derrubá-las antes.
+  idleTimeoutMillis: 60_000,
   keepAlive: true,
 })
 // Conexão que caiu enquanto parada: só sai do pool (o pg abre outra na próxima consulta).
@@ -104,10 +106,26 @@ export const pool: PoolConnection = {
 }
 
 // Cria o schema e as tabelas (server/schema.sql é idempotente) e já deixa conexões abertas,
-// para a primeira tela não esperar a abertura delas.
+// para a primeira tela não esperar a abertura delas. Se o banco estiver lotado ou fora do ar
+// (ex.: num deploy, enquanto a versão velha ainda segura conexões), tenta de novo por ~2 min
+// antes de desistir.
 export async function initDatabase() {
-  await pgPool.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
-  const prontas = await Promise.all(Array.from({ length: Math.min(4, pgPool.options.max ?? 4) }, conectar))
+  const tentativas = 12
+  for (let i = 1; ; i++) {
+    try {
+      await pgPool.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
+      break
+    } catch (err) {
+      const e = err as { code?: string; message?: string }
+      const passageiro =
+        ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', '53300', '57P03'].includes(e.code ?? '') ||
+        /EMAXCONN|max clients reached|too many clients/i.test(e.message ?? '')
+      if (!passageiro || i >= tentativas) throw err
+      console.warn(`Banco indisponível (${e.code}), nova tentativa em 10 s (${i}/${tentativas - 1})...`)
+      await new Promise((r) => setTimeout(r, 10_000))
+    }
+  }
+  const prontas = await Promise.all(Array.from({ length: Math.min(2, pgPool.options.max ?? 2) }, conectar))
   for (const c of prontas) c.release()
 }
 
