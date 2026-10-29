@@ -150,6 +150,8 @@ O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://r
 
 ## 🧱 Arquitetura
 
+Documentação técnica completa em [docs/](docs/): [ARQUITETURA.md](docs/ARQUITETURA.md) (diagramas e fluxos), [API.md](docs/API.md) (todas as rotas e quem pode acessar) e [BANCO.md](docs/BANCO.md) (diagrama ER e tabelas). Os dois últimos são gerados do código com `npm run docs`.
+
 ```
 Navegador (React)  ──/api──▶  Servidor Node/Express  ──▶  PostgreSQL (Supabase)
        ▲                          │

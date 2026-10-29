@@ -340,6 +340,57 @@ create table if not exists log_acessos (
 );
 create index if not exists log_acessos_padaria_idx on log_acessos (padaria_id, created_at);
 
+-- Chaves estrangeiras que faltavam (achadas na engenharia reversa do banco, out/2026): o banco passa
+-- a recusar, por exemplo, uma venda de uma padaria que não existe. Criadas uma vez; se alguma falhar
+-- (dado antigo inconsistente), o servidor avisa no log e sobe mesmo assim.
+-- log_acessos fica sem FK de propósito: o registro de acesso não pode depender de outras tabelas.
+do $$
+declare
+  fk record;
+begin
+  for fk in
+    select * from (values
+      ('caixa_movimentos', 'padaria_id', 'padarias', ''),
+      ('caixas', 'padaria_id', 'padarias', ''),
+      ('categorias_fotos', 'padaria_id', 'padarias', ''),
+      ('contas_financeiras', 'padaria_id', 'padarias', ''),
+      ('encomendas', 'padaria_id', 'padarias', ''),
+      ('historico_perfil', 'padaria_id', 'padarias', ''),
+      ('metas', 'padaria_id', 'padarias', ''),
+      ('movimentacoes_estoque', 'padaria_id', 'padarias', ''),
+      ('padaria_config', 'padaria_id', 'padarias', ''),
+      ('perdas', 'padaria_id', 'padarias', ''),
+      ('producoes', 'padaria_id', 'padarias', ''),
+      ('promocoes', 'padaria_id', 'padarias', ''),
+      ('receitas', 'padaria_id', 'padarias', ''),
+      ('vendas', 'padaria_id', 'padarias', ''),
+      ('vendas', 'caixa_id', 'caixas', ''),
+      ('vendas', 'devolvida_por', 'usuarios', ''),
+      ('encomendas', 'venda_id', 'vendas', ''),
+      ('encomendas', 'caixa_sinal_id', 'caixas', ''),
+      ('encomendas', 'created_by', 'usuarios', ''),
+      ('perdas', 'created_by', 'usuarios', ''),
+      ('caixa_movimentos', 'created_by', 'usuarios', ''),
+      -- Promoção apagada: a venda antiga continua, só perde o vínculo.
+      ('vendas_itens', 'promocao_id', 'promocoes', 'on delete set null')
+    ) as v(tabela, coluna, referencia, extra)
+  loop
+    if not exists (
+      select 1 from pg_constraint
+      where conname = fk.tabela || '_' || fk.coluna || '_fkey' and connamespace = 'padaria'::regnamespace
+    ) then
+      begin
+        execute format(
+          'alter table padaria.%I add constraint %I foreign key (%I) references padaria.%I (id) %s',
+          fk.tabela, fk.tabela || '_' || fk.coluna || '_fkey', fk.coluna, fk.referencia, fk.extra
+        );
+      exception when others then
+        raise warning 'FK %.% não criada: %', fk.tabela, fk.coluna, sqlerrm;
+      end;
+    end if;
+  end loop;
+end $$;
+
 -- Segunda trava: RLS em todas as tabelas, sem políticas. O servidor conecta como dono das
 -- tabelas (que ignora o RLS); qualquer outro papel do Supabase (anon, authenticated) não lê nada.
 do $$
