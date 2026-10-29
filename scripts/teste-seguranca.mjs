@@ -281,14 +281,18 @@ confere('Vazamento', 'erros não expõem detalhes internos (SQL, stack)', !/at .
 
 // ------------------------------------------------------------------ 11. força bruta (por último)
 titulo('11. Força bruta')
-// O limite conta 20 tentativas numa janela de 60 s que começou com os logins anteriores do teste;
-// se a janela virar no meio, a contagem recomeça. Por isso tenta até 45 vezes (sem limite, nunca
-// haveria 429) e para no primeiro bloqueio.
+// O limite (20 por minuto, por IP e rota) vale para login, cadastro, setup e código de senha.
+// Usa /auth/cadastro, que o teste não chamou antes: a janela de 60 s começa aqui, então o
+// bloqueio tem que vir exatamente na 21ª tentativa (nem antes, nem depois).
 const codigos = []
-for (let i = 0; i < 45 && codigos.at(-1) !== 429; i++) {
-  codigos.push((await api('POST', '/auth/login', { corpo: { email: `robo.${id}@teste.local`, senha: 'Chute123' } })).status)
+for (let i = 0; i < 25; i++) {
+  codigos.push(
+    (await api('POST', '/auth/cadastro', {
+      corpo: { nome: 'Robô', email: `robo.${id}@teste.local`, senha: 'Chute1234', codigo: 'ZZZZZZZZ' },
+    })).status,
+  )
 }
-confere('Força bruta', 'após 20 tentativas por minuto, o servidor bloqueia (429)', codigos.at(-1) === 429, `${codigos.length} tentativas: ${codigos.join(' ')}`)
+confere('Força bruta', 'após 20 tentativas por minuto, o servidor bloqueia (429)', codigos.indexOf(429) === 20, codigos.join(' '))
 
 // ------------------------------------------------------------------ resultado
 console.log(`\n${'─'.repeat(60)}`)

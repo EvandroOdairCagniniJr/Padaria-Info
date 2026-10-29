@@ -34,9 +34,13 @@ const pgPool = new pg.Pool({
           ca: readFileSync(new URL('./supabase-ca.crt', import.meta.url), 'utf8'),
           rejectUnauthorized: true,
         },
-  // Conexão parada é devolvida ao Supabase depois de 1 min (o padrão do pg era 10 s; 10 min
-  // segurava vagas demais e travou um deploy). Keep-alive para a rede não derrubá-las antes.
+  // Conexões paradas além da 1ª voltam ao Supabase depois de 1 min (10 min segurava vagas demais
+  // e travou um deploy). Uma fica sempre aberta (min: 1): abrir conexão custa TLS + autenticação,
+  // e a padaria tem minutos sem movimento. Keep-alive para a rede não derrubá-las.
+  min: 1,
   idleTimeoutMillis: 60_000,
+  // Sem isso, um handshake travado (banco lotado) esperaria minutos em vez de falhar e tentar de novo.
+  connectionTimeoutMillis: 15_000,
   keepAlive: true,
 })
 // Conexão que caiu enquanto parada: só sai do pool (o pg abre outra na próxima consulta).
@@ -109,24 +113,35 @@ export const pool: PoolConnection = {
 // para a primeira tela não esperar a abertura delas. Se o banco estiver lotado ou fora do ar
 // (ex.: num deploy, enquanto a versão velha ainda segura conexões), tenta de novo por ~2 min
 // antes de desistir.
+// Falhas de rede/lotação que passam sozinhas (vale tentar de novo). Senha errada, endereço
+// inválido etc. não entram aqui: falham na hora, com a mensagem certa.
+function falhaPassageira(err: unknown) {
+  const e = err as { code?: string; message?: string }
+  return (
+    ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', 'EAI_AGAIN', 'EHOSTUNREACH', 'ENETUNREACH', '53300', '57P03'].includes(
+      e.code ?? '',
+    ) || /EMAXCONN|max clients reached|too many clients|Connection terminated|timeout/i.test(e.message ?? '')
+  )
+}
+
 export async function initDatabase() {
+  const schema = readFileSync(new URL('./schema.sql', import.meta.url), 'utf8')
   const tentativas = 12
   for (let i = 1; ; i++) {
     try {
-      await pgPool.query(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'))
+      await pgPool.query(schema)
       break
     } catch (err) {
+      if (!falhaPassageira(err) || i >= tentativas) throw err
       const e = err as { code?: string; message?: string }
-      const passageiro =
-        ['ECONNREFUSED', 'ECONNRESET', 'ETIMEDOUT', '53300', '57P03'].includes(e.code ?? '') ||
-        /EMAXCONN|max clients reached|too many clients/i.test(e.message ?? '')
-      if (!passageiro || i >= tentativas) throw err
-      console.warn(`Banco indisponível (${e.code}), nova tentativa em 10 s (${i}/${tentativas - 1})...`)
+      console.warn(`Banco indisponível (${e.code ?? e.message}), nova tentativa em 10 s (${i}/${tentativas - 1})...`)
       await new Promise((r) => setTimeout(r, 10_000))
     }
   }
-  const prontas = await Promise.all(Array.from({ length: Math.min(2, pgPool.options.max ?? 2) }, conectar))
-  for (const c of prontas) c.release()
+  // Aquecimento é só conveniência: se o banco estiver cheio, sobe sem ele (as conexões abrem
+  // quando o primeiro pedido chegar) e devolve as que chegaram a abrir.
+  const aquecidas = await Promise.allSettled(Array.from({ length: Math.min(2, pgPool.options.max ?? 2) }, conectar))
+  for (const r of aquecidas) if (r.status === 'fulfilled') r.value.release()
 }
 
 export function novoCodigoConvite() {
