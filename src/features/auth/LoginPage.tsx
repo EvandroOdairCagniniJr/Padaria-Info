@@ -267,7 +267,7 @@ export function LoginPage() {
   if (modo === 'padaria') return <PrimeiroAcesso onVoltar={() => setModo('criar')} />
 
   return (
-    <div className="flex min-h-svh items-center justify-center bg-linear-to-br from-amber-50 via-orange-50 to-amber-100 px-4 py-8">
+    <div className="flex min-h-svh items-center justify-center fundo-padaria px-4 py-8">
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card/95 p-8 shadow-xl shadow-amber-900/10">
         <div className="space-y-2 text-center">
           <LogoPao className="mx-auto size-16 rounded-2xl shadow-md" />

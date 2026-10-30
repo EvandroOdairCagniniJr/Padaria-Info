@@ -23,80 +23,80 @@ const regras: { termos: RegExp; icone: LucideIcon; cor: string; categoria?: stri
   {
     termos: /croissant|folhad/,
     icone: Croissant,
-    cor: 'bg-amber-100 text-amber-700',
+    cor: 'vitrine-manteiga',
     categoria: 'Folhados',
   },
   {
     termos: /bolo|torta|cuca|panetone|chocotone/,
     icone: CakeSlice,
-    cor: 'bg-rose-100 text-rose-700',
+    cor: 'vitrine-morango',
     categoria: 'Bolos e tortas',
   },
   {
     termos: /sonho|rosquinha|donut|churros/,
     icone: Donut,
-    cor: 'bg-pink-100 text-pink-700',
+    cor: 'vitrine-doce-de-leite',
     categoria: 'Doces',
   },
   {
     termos: /biscoito|bolacha|cookie|broa|amanteigad/,
     icone: Cookie,
-    cor: 'bg-orange-100 text-orange-700',
+    cor: 'vitrine-biscoito',
     categoria: 'Biscoitos',
   },
   {
     termos: /caf[eé]|capuccino|cappuccino|expresso|pingado/,
     icone: Coffee,
-    cor: 'bg-stone-200 text-stone-700',
+    cor: 'vitrine-cafe',
     categoria: 'Cafés',
   },
   {
     termos: /farinha|fermento|a[cç][uú]car|\bsal\b|ingrediente|insumo|[oó]leo|margarina/,
     icone: Package,
-    cor: 'bg-neutral-200 text-neutral-600',
+    cor: 'vitrine-farinha',
     categoria: 'Ingredientes',
   },
   {
     termos: /p[aã]o|p[aã]es|baguete|bisnaga|ciabatta|de forma|careca|sovado|bengala/,
     icone: Wheat,
-    cor: 'bg-amber-100 text-amber-800',
+    cor: 'vitrine-trigo',
     categoria: 'Pães',
   },
   {
     termos: /sandu[ií]che|misto|lanche|salgad|coxinha|esfiha|empada|pastel|enroladinho|hamb/,
     icone: Sandwich,
-    cor: 'bg-yellow-100 text-yellow-800',
+    cor: 'vitrine-queijo',
     categoria: 'Salgados e lanches',
   },
   {
     termos: /leite|latic[ií]nio|iogurte|requeij|manteiga|queijo|nata/,
     icone: Milk,
-    cor: 'bg-sky-100 text-sky-700',
+    cor: 'vitrine-nata',
     categoria: 'Laticínios',
   },
   {
     termos: /refri|suco|[aá]gua|bebida|ch[aá] gelado|energ/,
     icone: CupSoda,
-    cor: 'bg-cyan-100 text-cyan-700',
+    cor: 'vitrine-laranja',
     categoria: 'Bebidas',
   },
   {
     termos: /sorvete|picol[eé]|a[cç]a[ií]/,
     icone: IceCreamCone,
-    cor: 'bg-violet-100 text-violet-700',
+    cor: 'vitrine-frutas',
     categoria: 'Sorvetes',
   },
-  { termos: /pizza/, icone: Pizza, cor: 'bg-red-100 text-red-700', categoria: 'Pizzas' },
+  { termos: /pizza/, icone: Pizza, cor: 'vitrine-tomate', categoria: 'Pizzas' },
   {
     termos: /doce|brigadeiro|bala|chocolate|bombom|pudim/,
     icone: Candy,
-    cor: 'bg-fuchsia-100 text-fuchsia-700',
+    cor: 'vitrine-chocolate',
     categoria: 'Doces',
   },
   {
     termos: /\bovos?\b|merceari/,
     icone: Egg,
-    cor: 'bg-amber-50 text-amber-600',
+    cor: 'vitrine-farinha',
     categoria: 'Mercearia',
   },
 ]
@@ -113,7 +113,7 @@ function regraDoProduto(produto: { nome: string; categoria?: string | null }) {
 }
 
 export function iconeProduto(produto: { nome: string; categoria?: string | null }) {
-  return regraDoProduto(produto) ?? { icone: Croissant, cor: 'bg-amber-100 text-amber-700' }
+  return regraDoProduto(produto) ?? { icone: Croissant, cor: 'vitrine-manteiga' }
 }
 
 // "Família" do produto para os destaques da Equipe (melhor vendedor de doces, de bebidas...).

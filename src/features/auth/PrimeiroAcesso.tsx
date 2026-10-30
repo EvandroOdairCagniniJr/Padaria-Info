@@ -109,7 +109,7 @@ export function PrimeiroAcesso({ onVoltar }: { onVoltar?: () => void }) {
   }
 
   return (
-    <div className="min-h-svh bg-linear-to-br from-amber-50 via-orange-50 to-amber-100 px-4 py-8">
+    <div className="min-h-svh fundo-padaria px-4 py-8">
       <div className="mx-auto w-full max-w-2xl overflow-hidden rounded-2xl border bg-card shadow-xl shadow-amber-900/10">
         <div className="border-b px-6 pt-6 pb-5 sm:px-8">
           {onVoltar && (

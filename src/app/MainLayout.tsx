@@ -123,7 +123,7 @@ export function MainLayout() {
 
   const menu = (
     <>
-      <nav className="flex-1 space-y-4 overflow-y-auto p-3">
+      <nav className="rolagem-menu flex-1 space-y-4 overflow-y-auto p-3">
         {secoes.map((secao) => {
           const itens = secao.itens.filter((item) => user && item.papeis.includes(user.papel))
           if (itens.length === 0) return null

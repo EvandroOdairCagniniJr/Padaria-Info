@@ -3,11 +3,13 @@
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/geist";
 @import "@fontsource-variable/outfit";
+/* Títulos e preços em destaque: serifa macia, de letreiro de padaria e lousa de cardápio. */
+@import "@fontsource-variable/fraunces/full.css";
 
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
-    --font-heading: 'Outfit Variable', 'Geist Variable', sans-serif;
+    --font-heading: 'Fraunces Variable', 'Outfit Variable', Georgia, serif;
     --font-sans: 'Geist Variable', sans-serif;
     --color-sidebar-ring: var(--sidebar-ring);
     --color-sidebar-border: var(--sidebar-border);
@@ -132,7 +134,61 @@
   h1 {
     font-family: var(--font-heading);
     }
+  /* Fraunces na versão macia (cantos arredondados) e tamanho óptico automático. */
+  .font-heading, h1 {
+    font-variation-settings: "SOFT" 100, "WONK" 0;
+    font-optical-sizing: auto;
+    }
+  /* Barras de rolagem em tom de trigo sobre o creme (Firefox e Chrome/Edge/Safari). */
+  html {
+    scrollbar-color: oklch(0.8 0.06 75) transparent;
+    }
+  ::selection {
+    background: oklch(0.86 0.09 80);
+    color: oklch(0.25 0.045 48);
+    }
 }
+
+/* Fundo das telas de entrada: papel de embrulho de padaria, com ramos de trigo bem clarinhos
+   e a luz quente de um forno no canto. */
+.fundo-padaria {
+  background-color: var(--background);
+  background-image:
+    radial-gradient(ellipse 70% 55% at 15% 0%, oklch(0.985 0.03 88 / 0.95), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 100% 100%, oklch(0.9 0.08 72 / 0.55), transparent 70%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='150' height='150' viewBox='0 0 150 150'%3E%3Cg fill='none' stroke='%238a5a2b' stroke-opacity='.14' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cg transform='translate(38 34) rotate(-24)'%3E%3Cpath d='M0 -2v52'/%3E%3Cpath d='M0 8c-6-2-8-8-7-13 5 1 8 6 7 13zM0 8c6-2 8-8 7-13-5 1-8 6-7 13zM0 19c-6-2-8-8-7-13 5 1 8 6 7 13zM0 19c6-2 8-8 7-13-5 1-8 6-7 13zM0 30c-6-2-8-8-7-13 5 1 8 6 7 13zM0 30c6-2 8-8 7-13-5 1-8 6-7 13z'/%3E%3C/g%3E%3Cg transform='translate(108 96) rotate(28)'%3E%3Cpath d='M0 -2v52'/%3E%3Cpath d='M0 8c-6-2-8-8-7-13 5 1 8 6 7 13zM0 8c6-2 8-8 7-13-5 1-8 6-7 13zM0 19c-6-2-8-8-7-13 5 1 8 6 7 13zM0 19c6-2 8-8 7-13-5 1-8 6-7 13zM0 30c-6-2-8-8-7-13 5 1 8 6 7 13zM0 30c6-2 8-8 7-13-5 1-8 6-7 13z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+}
+
+/* Vitrine: cor de fundo e do ícone de cada categoria de produto (src/lib/iconeProduto.ts),
+   tiradas da própria padaria — trigo, manteiga, morango, doce de leite, café, chocolate... */
+.vitrine-trigo { background: oklch(0.93 0.06 82); color: oklch(0.45 0.1 62); }
+.vitrine-manteiga { background: oklch(0.95 0.07 95); color: oklch(0.48 0.1 78); }
+.vitrine-morango { background: oklch(0.93 0.04 22); color: oklch(0.5 0.13 22); }
+.vitrine-doce-de-leite { background: oklch(0.92 0.05 65); color: oklch(0.45 0.09 55); }
+.vitrine-biscoito { background: oklch(0.92 0.06 70); color: oklch(0.5 0.12 52); }
+.vitrine-cafe { background: oklch(0.9 0.025 60); color: oklch(0.38 0.05 50); }
+.vitrine-chocolate { background: oklch(0.88 0.03 50); color: oklch(0.33 0.05 42); }
+.vitrine-farinha { background: oklch(0.945 0.012 80); color: oklch(0.5 0.025 70); }
+.vitrine-queijo { background: oklch(0.94 0.08 98); color: oklch(0.5 0.11 85); }
+.vitrine-nata { background: oklch(0.965 0.02 90); color: oklch(0.5 0.05 75); }
+.vitrine-laranja { background: oklch(0.93 0.07 70); color: oklch(0.55 0.15 48); }
+.vitrine-frutas { background: oklch(0.92 0.04 350); color: oklch(0.45 0.11 350); }
+.vitrine-tomate { background: oklch(0.92 0.05 35); color: oklch(0.5 0.15 32); }
+
+/* Barra de rolagem do menu lateral na cor do próprio menu (chocolate), um tom acima do
+   fundo, como a casca do pão: some no menu em vez de aparecer clara. */
+.rolagem-menu {
+  scrollbar-width: thin;
+  scrollbar-color: var(--sidebar-border) var(--sidebar);
+}
+.rolagem-menu::-webkit-scrollbar { width: 8px; }
+.rolagem-menu::-webkit-scrollbar-track { background: var(--sidebar); }
+.rolagem-menu::-webkit-scrollbar-thumb {
+  background: var(--sidebar-border);
+  border-radius: 999px;
+  border: 2px solid var(--sidebar);
+}
+.rolagem-menu::-webkit-scrollbar-thumb:hover { background: var(--sidebar-primary); }
 /* Coroa do 1º lugar no ranking (Equipe): pula girando de leve, "amassa" ao cair
    e a sombra embaixo encolhe enquanto ela está no ar. */
 @keyframes coroa-pulo {
