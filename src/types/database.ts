@@ -204,6 +204,8 @@ export type DadosPadaria = {
   horario: string | null
   endereco: EnderecoCadastro | null
   mensagem_comprovante: string | null
+  // Logo enviada pelo dono (data URL): menu, comprovante e ícone da aba.
+  logo?: string | null
 }
 
 // Linha de GET /api/equipe/resumo: desempenho de um membro no período + cadastro completo.

@@ -118,15 +118,36 @@ const valorSchema = z
   .max(100_000_000)
   .nullable()
 
+// Um período maior não pode ter meta menor que um período menor (ex.: R$ 10.000 no dia e
+// R$ 1 na semana). Períodos em branco ficam de fora da comparação.
+function incoerenciaMetas(v: { dia: number | null; semana: number | null; mes: number | null }) {
+  const brl = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  if (v.dia != null && v.semana != null && v.semana < v.dia) {
+    return `A meta da semana (${brl(v.semana)}) não pode ser menor que a do dia (${brl(v.dia)}).`
+  }
+  if (v.semana != null && v.mes != null && v.mes < v.semana) {
+    return `A meta do mês (${brl(v.mes)}) não pode ser menor que a da semana (${brl(v.semana)}).`
+  }
+  if (v.dia != null && v.mes != null && v.mes < v.dia) {
+    return `A meta do mês (${brl(v.mes)}) não pode ser menor que a do dia (${brl(v.dia)}).`
+  }
+  return null
+}
+
 // Dono define as metas de um alvo de uma vez; null remove a meta daquele período.
 metasRouter.put('/', exigirPapel('dono'), async (req, res) => {
   const m = validar(
-    z.object({
-      alvo: z.string().min(1),
-      dia: valorSchema,
-      semana: valorSchema,
-      mes: valorSchema,
-    }),
+    z
+      .object({
+        alvo: z.string().min(1),
+        dia: valorSchema,
+        semana: valorSchema,
+        mes: valorSchema,
+      })
+      .superRefine((v, ctx) => {
+        const erro = incoerenciaMetas(v)
+        if (erro) ctx.addIssue({ code: 'custom', message: erro })
+      }),
     req.body,
   )
   const padariaId: string = res.locals.padariaId

@@ -24,6 +24,7 @@ export interface FormPadaria {
   horario: string
   endereco: Endereco
   mensagem_comprovante: string
+  logo?: string | null
 }
 
 export type ErrosPadaria = Partial<Record<keyof FormPadaria, string>>
@@ -43,6 +44,7 @@ export function padariaParaForm(p: DadosPadaria | null | undefined): FormPadaria
       ? { ...enderecoVazio, ...p.endereco, cep: mascaraCEP(p.endereco.cep) }
       : enderecoVazio,
     mensagem_comprovante: p?.mensagem_comprovante ?? '',
+    logo: p?.logo ?? null,
   }
 }
 

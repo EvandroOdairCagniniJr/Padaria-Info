@@ -28,6 +28,8 @@ export interface Loja {
   // Linhas do cabeçalho do comprovante (endereço, CNPJ, telefone).
   linhas: string[]
   mensagem: string | null
+  // Logo enviada pelo dono (data URL); sem ela, a inicial do nome no cabeçalho.
+  logo?: string | null
 }
 
 // Cabeçalho do comprovante a partir do cadastro da padaria (ou do .env, em instalações antigas).
@@ -52,6 +54,7 @@ export function lojaDoComprovante(p: DadosPadaria | null | undefined): Loja {
       telefone && `Tel. ${mascaraTelefone(telefone)}`,
     ].filter(Boolean) as string[],
     mensagem: p.mensagem_comprovante,
+    logo: p.logo ?? null,
   }
 }
 

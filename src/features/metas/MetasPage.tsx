@@ -289,6 +289,20 @@ function LinhaMembro({ membro: m, onEditar }: { membro: MembroMetas; onEditar?: 
   )
 }
 
+// Mesma regra do servidor (server/metas.ts): período maior não tem meta menor que um menor.
+function incoerenciaMetas(v: ValoresMeta) {
+  if (v.dia != null && v.semana != null && v.semana < v.dia) {
+    return `A meta da semana (${formatBRL(v.semana)}) não pode ser menor que a do dia (${formatBRL(v.dia)}).`
+  }
+  if (v.semana != null && v.mes != null && v.mes < v.semana) {
+    return `A meta do mês (${formatBRL(v.mes)}) não pode ser menor que a da semana (${formatBRL(v.semana)}).`
+  }
+  if (v.dia != null && v.mes != null && v.mes < v.dia) {
+    return `A meta do mês (${formatBRL(v.mes)}) não pode ser menor que a do dia (${formatBRL(v.dia)}).`
+  }
+  return null
+}
+
 function DialogMetas({
   alvoInicial,
   dados,
@@ -328,21 +342,44 @@ function DialogMetas({
         ? 'Vale para cada pessoa da equipe que não tem meta própria.'
         : `Meta própria de ${membro?.nome ?? 'esta pessoa'}. Deixe em branco para usar o padrão da equipe.`
 
+  const lerCampo = (texto: string) => {
+    const t = texto.replace(/\./g, '').replace(',', '.').trim()
+    return t ? Number(t) : null
+  }
+  const valoresDigitados = {
+    dia: lerCampo(campos.dia),
+    semana: lerCampo(campos.semana),
+    mes: lerCampo(campos.mes),
+  }
+  const incoerencia = incoerenciaMetas(valoresDigitados)
+  const diaValido = valoresDigitados.dia != null && valoresDigitados.dia > 0
+
+  // Semana = dia × 7 e mês = dia × 30 (a padaria abre todo dia); dá para ajustar depois.
+  function sugerirPeloDia() {
+    if (!diaValido) return
+    const d = valoresDigitados.dia as number
+    const fmt = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 2 })
+    setCampos((c) => ({ ...c, semana: fmt(d * 7), mes: fmt(d * 30) }))
+  }
+
   async function onSubmit(e: FormEvent) {
     e.preventDefault()
     const valores = {} as ValoresMeta
     for (const p of periodos) {
-      const texto = campos[p.key].replace(/\./g, '').replace(',', '.').trim()
-      if (!texto) {
+      const n = valoresDigitados[p.key]
+      if (n == null) {
         valores[p.key] = null
         continue
       }
-      const n = Number(texto)
       if (!(n > 0)) {
         toast.error(`Meta ${p.curto.toLowerCase()} inválida`)
         return
       }
       valores[p.key] = n
+    }
+    if (incoerencia) {
+      toast.error(incoerencia)
+      return
     }
     try {
       await salvar.mutateAsync({ alvo, ...valores })
@@ -403,9 +440,20 @@ function DialogMetas({
               </div>
             ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Deixe em branco o período que não precisa de meta. Vendas devolvidas não contam.
-          </p>
+          {incoerencia ? (
+            <p role="alert" className="text-xs font-medium text-destructive">
+              {incoerencia}
+            </p>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              Deixe em branco o período que não precisa de meta. Vendas devolvidas não contam.
+            </p>
+          )}
+          {diaValido && (
+            <Button type="button" variant="outline" size="sm" onClick={sugerirPeloDia}>
+              Preencher semana e mês a partir do dia (× 7 e × 30)
+            </Button>
+          )}
           <DialogFooter>
             <Button type="button" variant="outline" onClick={onFechar}>
               Cancelar

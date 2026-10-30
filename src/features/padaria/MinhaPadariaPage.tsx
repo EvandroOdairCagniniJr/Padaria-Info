@@ -10,6 +10,7 @@ import {
   type ErrosPadaria,
   type FormPadaria,
 } from '@/features/padaria/CamposPadaria'
+import { LogoPicker } from '@/features/padaria/LogoPicker'
 import type { Comprovante } from '@/features/pdv/comprovante'
 import { desenharComprovante } from '@/features/pdv/comprovanteArquivo'
 import { digitos } from '@/lib/documentos'
@@ -31,6 +32,7 @@ function formParaDados(f: FormPadaria): DadosPadaria {
     horario: vazioViraNull(f.horario),
     endereco: { ...f.endereco, cep: digitos(f.endereco.cep) },
     mensagem_comprovante: vazioViraNull(f.mensagem_comprovante),
+    logo: f.logo ?? null,
   }
 }
 
@@ -139,8 +141,11 @@ export function MinhaPadariaPage() {
       </div>
 
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
-        <div className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
-          <CamposPadaria valor={atual} onChange={mudar} erros={erros} />
+        <div className="min-w-0 space-y-6">
+          <LogoPicker logo={atual.logo ?? null} onChange={(logo) => mudar({ ...atual, logo })} />
+          <div className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
+            <CamposPadaria valor={atual} onChange={mudar} erros={erros} />
+          </div>
         </div>
 
         <aside className="space-y-2 lg:sticky lg:top-0">

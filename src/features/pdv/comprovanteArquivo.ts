@@ -49,7 +49,12 @@ function quebrar(ctx: CanvasRenderingContext2D, texto: string, largura: number) 
 
 // Desenha o comprovante e devolve a altura usada. Roda duas vezes: a primeira só mede
 // (desenhar = false) para saber o tamanho do papel.
-function desenhar(ctx: CanvasRenderingContext2D, c: Comprovante, desenhar: boolean) {
+function desenhar(
+  ctx: CanvasRenderingContext2D,
+  c: Comprovante,
+  desenhar: boolean,
+  logo: HTMLImageElement | null = null,
+) {
   const esq = MARGEM
   const dir = LARGURA - MARGEM
   const util = dir - esq
@@ -95,19 +100,40 @@ function desenhar(ctx: CanvasRenderingContext2D, c: Comprovante, desenhar: boole
   if (desenhar) {
     ctx.fillStyle = cores.marca
     ctx.fillRect(0, 0, LARGURA, alturaFaixa)
-    ctx.fillStyle = 'rgba(255,255,255,0.18)'
-    ctx.beginPath()
-    ctx.arc(LARGURA / 2, 34, 20, 0, Math.PI * 2)
-    ctx.fill()
+    if (logo) {
+      // Logo da padaria num círculo branco, inteira (sem cortar), no lugar da inicial.
+      const raio = 24
+      ctx.fillStyle = '#fff'
+      ctx.beginPath()
+      ctx.arc(LARGURA / 2, 34, raio, 0, Math.PI * 2)
+      ctx.fill()
+      const caixa = raio * 1.5
+      const escala = Math.min(caixa / logo.naturalWidth, caixa / logo.naturalHeight)
+      const w = logo.naturalWidth * escala
+      const h = logo.naturalHeight * escala
+      ctx.save()
+      ctx.beginPath()
+      ctx.arc(LARGURA / 2, 34, raio - 1, 0, Math.PI * 2)
+      ctx.clip()
+      ctx.drawImage(logo, LARGURA / 2 - w / 2, 34 - h / 2, w, h)
+      ctx.restore()
+    } else {
+      ctx.fillStyle = 'rgba(255,255,255,0.18)'
+      ctx.beginPath()
+      ctx.arc(LARGURA / 2, 34, 20, 0, Math.PI * 2)
+      ctx.fill()
+    }
   }
   y = 34
-  if (desenhar) ctx.textBaseline = 'middle'
-  texto(loja.nome.trim().charAt(0).toUpperCase() || 'P', LARGURA / 2, 20, {
-    peso: 700,
-    cor: '#fff',
-    alinhar: 'center',
-  })
-  if (desenhar) ctx.textBaseline = 'alphabetic'
+  if (!logo) {
+    if (desenhar) ctx.textBaseline = 'middle'
+    texto(loja.nome.trim().charAt(0).toUpperCase() || 'P', LARGURA / 2, 20, {
+      peso: 700,
+      cor: '#fff',
+      alinhar: 'center',
+    })
+    if (desenhar) ctx.textBaseline = 'alphabetic'
+  }
   y = 80
   texto(loja.nome, LARGURA / 2, 20, { peso: 700, cor: '#fff', alinhar: 'center' })
   for (const dado of linhasLoja) {
@@ -232,6 +258,17 @@ function serrilhar(ctx: CanvasRenderingContext2D, altura: number) {
   ctx.fill()
 }
 
+// Logo da padaria pronta para o canvas; se não carregar, o comprovante sai com a inicial.
+function carregarLogo(src: string | null | undefined) {
+  if (!src) return Promise.resolve(null)
+  return new Promise<HTMLImageElement | null>((resolve) => {
+    const img = new Image()
+    img.onload = () => resolve(img)
+    img.onerror = () => resolve(null)
+    img.src = src
+  })
+}
+
 export async function desenharComprovante(c: Comprovante) {
   // Espera a fonte para a medida bater com o desenho.
   await document.fonts?.load(fonte(14, 500)).catch(() => undefined)
@@ -247,7 +284,7 @@ export async function desenharComprovante(c: Comprovante) {
   ctx.scale(ESCALA, ESCALA)
   ctx.fillStyle = cores.papel
   ctx.fillRect(0, 0, LARGURA, altura)
-  desenhar(ctx, c, true)
+  desenhar(ctx, c, true, await carregarLogo(lojaDe(c).logo))
   serrilhar(ctx, altura)
   return canvas
 }

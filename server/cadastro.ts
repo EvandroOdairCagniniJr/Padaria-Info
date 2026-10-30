@@ -179,6 +179,13 @@ export const padariaSchema = z.object({
   horario: texto(120, 'Horário de funcionamento'),
   endereco: enderecoSchema,
   mensagem_comprovante: texto(120, 'Mensagem do comprovante'),
+  // Logo da padaria (já reduzida no navegador): menu, comprovante e ícone da aba.
+  logo: z
+    .string()
+    .regex(/^data:image\/(jpeg|png|webp);base64,[A-Za-z0-9+/=]+$/, 'Logo inválida')
+    .max(400_000, 'Logo muito grande')
+    .nullish()
+    .transform((v) => v ?? null),
 })
 
 export type DadosPadaria = z.output<typeof padariaSchema>

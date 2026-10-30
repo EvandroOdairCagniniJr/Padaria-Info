@@ -25,7 +25,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { BoasVindas } from '@/app/BoasVindas'
 import { Avatar } from '@/components/Avatar'
-import { LogoPao } from '@/components/LogoPao'
+import { LogoPadaria } from '@/components/LogoPao'
 import { usePadaria } from '@/features/padaria/api'
 import { PerfilDialog } from '@/features/auth/PerfilDialog'
 import { useNovidadesNaoVistas } from '@/features/equipe/Novidades'
@@ -88,13 +88,13 @@ const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
   },
 ]
 
-// Topo do menu: o pão do ícone do site e o nome cadastrado em "Minha padaria".
+// Topo do menu: a logo e o nome cadastrados em "Minha padaria" (sem logo, o pão do sistema).
 function Logo() {
   const padaria = usePadaria()
   const nome = padaria.data?.nome_fantasia || (padaria.isLoading ? '' : 'Padaria Info')
   return (
     <div className="flex min-w-0 items-center gap-2.5">
-      <LogoPao />
+      <LogoPadaria />
       <div className="min-w-0 font-heading text-lg leading-tight font-semibold">
         <span className="line-clamp-2 break-words" title={nome}>
           {nome}
