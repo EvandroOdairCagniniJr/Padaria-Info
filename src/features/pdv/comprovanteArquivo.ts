@@ -1,6 +1,7 @@
 // Comprovante como arquivo de verdade: desenhado num canvas (imagem PNG) e embalado num PDF.
 // Tudo no navegador, sem biblioteca extra e sem internet.
 import { lojaDe, numeroComprovante, type Comprovante } from '@/features/pdv/comprovante'
+import { coresComprovante } from '@/features/padaria/opcoesComprovante'
 import { formatBRL, formatDataHora, formatQuantidade } from '@/lib/format'
 
 const LARGURA = 420
@@ -94,11 +95,13 @@ function desenhar(
 
   // Cabeçalho: faixa com a marca da padaria (endereço comprido quebra em mais linhas).
   const loja = lojaDe(c)
+  const ver = loja.opcoes.mostrar
+  const corMarca = coresComprovante[loja.opcoes.cor].hex
   ctx.font = fonte(11)
   const linhasLoja = loja.linhas.flatMap((l) => quebrar(ctx, l, util))
   const alturaFaixa = 96 + linhasLoja.length * 16
   if (desenhar) {
-    ctx.fillStyle = cores.marca
+    ctx.fillStyle = corMarca
     ctx.fillRect(0, 0, LARGURA, alturaFaixa)
     if (logo) {
       // Logo da padaria num círculo branco, inteira (sem cortar), no lugar da inicial.
@@ -144,12 +147,12 @@ function desenhar(
 
   // Título, selo de pagamento confirmado e o valor em destaque.
   y += 34
-  texto(c.segundaVia ? 'Comprovante de venda · 2ª via' : 'Comprovante de venda', LARGURA / 2, 15, {
+  texto(c.segundaVia ? `${loja.opcoes.titulo} · 2ª via` : loja.opcoes.titulo, LARGURA / 2, 15, {
     peso: 600,
     alinhar: 'center',
   })
   y += 18
-  if (desenhar) {
+  if (desenhar && ver.selo) {
     const selo = 'Pagamento confirmado'
     ctx.font = fonte(12, 600)
     const w = ctx.measureText(selo).width + 34
@@ -170,20 +173,20 @@ function desenhar(
     ctx.textAlign = 'left'
     ctx.fillText(selo, x + 27, y + 16.5)
   }
-  y += 24 + 46
+  y += (ver.selo ? 24 : 0) + 46
   texto(brl(c.total), LARGURA / 2, 34, { peso: 700, alinhar: 'center' })
 
   // Detalhes da venda.
   y += 22
   separador()
   linhaInfo('Data e hora', formatDataHora(c.quando))
-  linhaInfo('Nº do comprovante', numeroComprovante(c))
+  if (ver.numero) linhaInfo('Nº do comprovante', numeroComprovante(c))
   linhaInfo('Forma de pagamento', c.formaPagamento)
   if (c.recebido != null) {
     linhaInfo('Valor recebido', brl(c.recebido))
     linhaInfo('Troco', brl(c.recebido - c.total))
   }
-  if (c.atendente) linhaInfo('Atendente', c.atendente)
+  if (ver.atendente && c.atendente) linhaInfo('Atendente', c.atendente)
 
   // Itens.
   y += 20
@@ -203,13 +206,15 @@ function desenhar(
       y += 18
       texto(resto, esq, 14, { peso: 500 })
     }
-    y += 17
-    texto(
-      `${formatQuantidade(item.quantidade)} ${item.unidade} × ${brl(item.precoUnitario)}`,
-      esq,
-      12,
-      { cor: cores.suave },
-    )
+    if (ver.detalhe_itens) {
+      y += 17
+      texto(
+        `${formatQuantidade(item.quantidade)} ${item.unidade} × ${brl(item.precoUnitario)}`,
+        esq,
+        12,
+        { cor: cores.suave },
+      )
+    }
     if (item.desconto) {
       y += 17
       texto(item.promocao ?? 'Desconto', esq, 12, { cor: cores.ok })
@@ -220,6 +225,15 @@ function desenhar(
   // Total.
   y += 18
   separador(false)
+  if (ver.resumo) {
+    // Resumo: quantos itens e, havendo desconto, o subtotal antes dele.
+    const qtd = c.itens.length
+    y += 24
+    texto(`${qtd} ${qtd === 1 ? 'item' : 'itens'}`, esq, 13, { cor: cores.suave })
+    if (c.descontos) {
+      texto(`Subtotal ${brl(c.total + c.descontos)}`, dir, 13, { cor: cores.suave, alinhar: 'right' })
+    }
+  }
   if (c.descontos) {
     y += 24
     texto('Você economizou', esq, 13, { peso: 600, cor: cores.ok })
@@ -237,6 +251,14 @@ function desenhar(
     peso: 600,
     alinhar: 'center',
   })
+  // Recado extra do dono (Wi-Fi, Instagram, encomendas...), quebrado na largura do cupom.
+  if (loja.opcoes.mensagem_extra) {
+    ctx.font = fonte(12)
+    for (const linha of quebrar(ctx, loja.opcoes.mensagem_extra, util)) {
+      y += 17
+      texto(linha, LARGURA / 2, 12, { cor: cores.texto, alinhar: 'center' })
+    }
+  }
   y += 18
   texto('Documento sem valor fiscal', LARGURA / 2, 11, { cor: cores.suave, alinhar: 'center' })
   y += 28

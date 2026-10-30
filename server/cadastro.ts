@@ -179,6 +179,30 @@ export const padariaSchema = z.object({
   horario: texto(120, 'Horário de funcionamento'),
   endereco: enderecoSchema,
   mensagem_comprovante: texto(120, 'Mensagem do comprovante'),
+  // Personalização do comprovante (src/features/padaria/opcoesComprovante.ts tem as mesmas chaves).
+  comprovante: z
+    .object({
+      cor: z.enum(['chocolate', 'cafe', 'caramelo', 'vinho', 'oliva', 'grafite']).optional(),
+      titulo: z.string().trim().max(40, 'Título do comprovante: no máximo 40 caracteres').optional(),
+      mensagem_extra: z
+        .string()
+        .trim()
+        .max(160, 'Recado extra: no máximo 160 caracteres')
+        .nullish()
+        .transform((v) => v || null),
+      mostrar: z
+        .object(
+          Object.fromEntries(
+            [
+              'logo', 'endereco', 'cnpj', 'telefone', 'instagram', 'horario', 'selo', 'numero',
+              'atendente', 'detalhe_itens', 'resumo',
+            ].map((k) => [k, z.boolean().optional()]),
+          ),
+        )
+        .optional(),
+    })
+    .nullish()
+    .transform((v) => v ?? null),
   // Logo da padaria (já reduzida no navegador): menu, comprovante e ícone da aba.
   logo: z
     .string()

@@ -11,6 +11,7 @@ import {
   type FormPadaria,
 } from '@/features/padaria/CamposPadaria'
 import { LogoPicker } from '@/features/padaria/LogoPicker'
+import { PersonalizarComprovante } from '@/features/padaria/PersonalizarComprovante'
 import type { Comprovante } from '@/features/pdv/comprovante'
 import { desenharComprovante } from '@/features/pdv/comprovanteArquivo'
 import { digitos } from '@/lib/documentos'
@@ -33,6 +34,7 @@ function formParaDados(f: FormPadaria): DadosPadaria {
     endereco: { ...f.endereco, cep: digitos(f.endereco.cep) },
     mensagem_comprovante: vazioViraNull(f.mensagem_comprovante),
     logo: f.logo ?? null,
+    comprovante: f.comprovante ?? null,
   }
 }
 
@@ -42,10 +44,20 @@ const exemplo: Omit<Comprovante, 'loja'> = {
   quando: new Date().toISOString(),
   itens: [
     { nome: 'Pão francês', quantidade: 0.5, unidade: 'kg', precoUnitario: 18.9 },
-    { nome: 'Café com leite', quantidade: 1, unidade: 'un', precoUnitario: 6 },
+    {
+      nome: 'Café com leite',
+      quantidade: 2,
+      unidade: 'un',
+      precoUnitario: 6,
+      desconto: 1.2,
+      promocao: 'Café da manhã -10%',
+    },
+    { nome: 'Pão de queijo', quantidade: 3, unidade: 'un', precoUnitario: 3.5 },
   ],
-  total: 15.45,
-  formaPagamento: 'Pix',
+  total: 30.75,
+  descontos: 1.2,
+  formaPagamento: 'Dinheiro',
+  recebido: 50,
   atendente: 'Atendente',
 }
 
@@ -143,6 +155,10 @@ export function MinhaPadariaPage() {
       <div className="grid items-start gap-6 lg:grid-cols-[minmax(0,1fr)_340px]">
         <div className="min-w-0 space-y-6">
           <LogoPicker logo={atual.logo ?? null} onChange={(logo) => mudar({ ...atual, logo })} />
+          <PersonalizarComprovante
+            valor={atual.comprovante}
+            onChange={(comprovante) => mudar({ ...atual, comprovante })}
+          />
           <div className="rounded-xl border bg-card p-5 shadow-sm sm:p-6">
             <CamposPadaria valor={atual} onChange={mudar} erros={erros} />
           </div>

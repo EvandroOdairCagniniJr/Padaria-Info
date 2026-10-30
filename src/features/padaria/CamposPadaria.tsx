@@ -25,6 +25,7 @@ export interface FormPadaria {
   endereco: Endereco
   mensagem_comprovante: string
   logo?: string | null
+  comprovante?: DadosPadaria['comprovante']
 }
 
 export type ErrosPadaria = Partial<Record<keyof FormPadaria, string>>
@@ -45,6 +46,7 @@ export function padariaParaForm(p: DadosPadaria | null | undefined): FormPadaria
       : enderecoVazio,
     mensagem_comprovante: p?.mensagem_comprovante ?? '',
     logo: p?.logo ?? null,
+    comprovante: p?.comprovante ?? null,
   }
 }
 

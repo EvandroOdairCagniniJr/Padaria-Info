@@ -82,23 +82,35 @@ function quebrar(texto: string) {
 // As linhas do cupom em texto: usadas no WhatsApp e no Copiar.
 export function linhasComprovante(c: Comprovante) {
   const qtdItens = c.itens.length
+  const loja = lojaDe(c)
+  const ver = loja.opcoes.mostrar
+  const titulo = loja.opcoes.titulo.toUpperCase()
   const linhas = [
-    ...centro(lojaDe(c).nome.toUpperCase()),
-    ...lojaDe(c).linhas.flatMap(centro),
+    ...centro(loja.nome.toUpperCase()),
+    ...loja.linhas.flatMap(centro),
     TRACO,
-    ...centro(c.segundaVia ? 'COMPROVANTE DE VENDA - 2ª VIA' : 'COMPROVANTE DE VENDA'),
-    ...colunas(`Nº ${numeroComprovante(c)}`, formatDataHora(c.quando)),
+    ...centro(c.segundaVia ? `${titulo} - 2ª VIA` : titulo),
+    ...(ver.numero
+      ? colunas(`Nº ${numeroComprovante(c)}`, formatDataHora(c.quando))
+      : colunas('', formatDataHora(c.quando))),
     TRACO,
-    ...c.itens.flatMap((i) => [
-      ...quebrar(i.nome),
-      ...colunas(
-        `  ${formatQuantidade(i.quantidade)} ${i.unidade} x ${brl(i.precoUnitario)}`,
-        brl(i.quantidade * i.precoUnitario),
-      ),
-      ...(i.desconto ? colunas(`  ${i.promocao ?? 'Desconto'}`, `-${brl(i.desconto)}`) : []),
-    ]),
+    ...c.itens.flatMap((i) =>
+      ver.detalhe_itens
+        ? [
+            ...quebrar(i.nome),
+            ...colunas(
+              `  ${formatQuantidade(i.quantidade)} ${i.unidade} x ${brl(i.precoUnitario)}`,
+              brl(i.quantidade * i.precoUnitario),
+            ),
+            ...(i.desconto ? colunas(`  ${i.promocao ?? 'Desconto'}`, `-${brl(i.desconto)}`) : []),
+          ]
+        : [
+            ...colunas(i.nome, brl(i.quantidade * i.precoUnitario)),
+            ...(i.desconto ? colunas(`  ${i.promocao ?? 'Desconto'}`, `-${brl(i.desconto)}`) : []),
+          ],
+    ),
     TRACO,
-    ...colunas(`${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'}`, ''),
+    ...(ver.resumo ? colunas(`${qtdItens} ${qtdItens === 1 ? 'item' : 'itens'}`, '') : []),
     ...(c.descontos
       ? [
           ...colunas('Subtotal', brl(c.total + c.descontos)),
@@ -114,11 +126,12 @@ export function linhasComprovante(c: Comprovante) {
     linhas.push(...colunas('Troco', brl(c.recebido - c.total)))
   }
   linhas.push(TRACO)
-  if (c.atendente) linhas.push(...quebrar(`Atendente: ${c.atendente}`))
+  if (ver.atendente && c.atendente) linhas.push(...quebrar(`Atendente: ${c.atendente}`))
   linhas.push(
     ...centro('Documento sem valor fiscal'),
     '',
-    ...centro(lojaDe(c).mensagem || 'Obrigado pela preferência!'),
+    ...centro(loja.mensagem || 'Obrigado pela preferência!'),
+    ...(loja.opcoes.mensagem_extra ? centro(loja.opcoes.mensagem_extra) : []),
   )
   return linhas
 }

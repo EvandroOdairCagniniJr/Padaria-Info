@@ -1,4 +1,5 @@
 // Tipos das linhas devolvidas pela API (server/routes.ts), espelhando server/schema.sql.
+import type { OpcoesComprovante } from '@/features/padaria/opcoesComprovante'
 
 export type FormaPagamento = 'dinheiro' | 'cartao_credito' | 'cartao_debito' | 'pix'
 export type TipoMovimentacao = 'entrada' | 'saida' | 'ajuste'
@@ -206,6 +207,8 @@ export type DadosPadaria = {
   mensagem_comprovante: string | null
   // Logo enviada pelo dono (data URL): menu, comprovante e ícone da aba.
   logo?: string | null
+  // Personalização do comprovante (cor, título, recado, o que mostrar).
+  comprovante?: Partial<OpcoesComprovante> | null
 }
 
 // Linha de GET /api/equipe/resumo: desempenho de um membro no período + cadastro completo.
