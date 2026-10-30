@@ -179,17 +179,17 @@
    fundo, como a casca do pão: some no menu em vez de aparecer clara. */
 .rolagem-menu {
   scrollbar-width: thin;
-  /* Pegador dourado (casca de pão, como o item ativo do menu) sobre a trilha chocolate. */
-  scrollbar-color: oklch(0.72 0.11 72) var(--sidebar);
+  /* Pegador no mesmo dourado do item ativo do menu (ex.: PDV) sobre a trilha chocolate. */
+  scrollbar-color: var(--sidebar-primary) var(--sidebar);
 }
 .rolagem-menu::-webkit-scrollbar { width: 8px; }
 .rolagem-menu::-webkit-scrollbar-track { background: var(--sidebar); }
 .rolagem-menu::-webkit-scrollbar-thumb {
-  background: oklch(0.72 0.11 72);
+  background: var(--sidebar-primary);
   border-radius: 999px;
   border: 2px solid var(--sidebar);
 }
-.rolagem-menu::-webkit-scrollbar-thumb:hover { background: var(--sidebar-primary); }
+.rolagem-menu::-webkit-scrollbar-thumb:hover { background: oklch(0.86 0.1 80); }
 /* Coroa do 1º lugar no ranking (Equipe): pula girando de leve, "amassa" ao cair
    e a sombra embaixo encolhe enquanto ela está no ar. */
 @keyframes coroa-pulo {
