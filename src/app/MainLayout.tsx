@@ -91,7 +91,7 @@ const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
 // Topo do menu: a logo e o nome cadastrados em "Minha padaria" (sem logo, o pão do sistema).
 function Logo() {
   const padaria = usePadaria()
-  const nome = padaria.data?.nome_fantasia || (padaria.isLoading ? '' : 'Padaria Info')
+  const nome = padaria.data?.nome_fantasia || (padaria.isLoading ? '' : 'Coffee Break')
   return (
     <div className="flex min-w-0 items-center gap-2.5">
       <LogoPadaria />

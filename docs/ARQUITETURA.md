@@ -1,4 +1,4 @@
-# Arquitetura do Padaria Info
+# Arquitetura do Coffee Break
 
 Como o sistema funciona de ponta a ponta. Para os detalhes, veja [API.md](API.md) (todas as rotas) e [BANCO.md](BANCO.md) (todas as tabelas). Esses dois arquivos são gerados por `npm run docs`.
 

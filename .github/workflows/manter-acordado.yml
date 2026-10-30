@@ -1,4 +1,4 @@
-# Mantém o Padaria Info rápido no plano grátis, sem custo (Actions é grátis em repositório público):
+# Mantém o Coffee Break rápido no plano grátis, sem custo (Actions é grátis em repositório público):
 # - Render free dorme após 15 min sem acesso → uma "cutucada" a cada 10 min o mantém acordado.
 # - Supabase free pausa o banco após 7 dias sem atividade → a rota /api/saude/banco faz um "select 1".
 #

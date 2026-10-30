@@ -1,4 +1,4 @@
--- Padaria Info — schema PostgreSQL (Supabase). Aplicado automaticamente ao iniciar o servidor;
+-- Coffee Break — schema PostgreSQL (Supabase). Aplicado automaticamente ao iniciar o servidor;
 -- todas as instruções são idempotentes (rodar de novo não estraga nada).
 --
 -- Tudo fica no schema "padaria", FORA do schema public: a API automática do Supabase (PostgREST)

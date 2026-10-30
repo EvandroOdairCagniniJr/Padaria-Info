@@ -16,9 +16,21 @@ export function LogoPao({ className }: { className?: string }) {
 }
 
 // Logo da padaria logada (enviada pelo dono em "Minha padaria"); sem ela, o pão do sistema.
-// Também troca o ícone da aba do navegador pela logo enquanto a pessoa está no sistema.
+// Também troca o ícone e o título da aba do navegador pela logo e o nome da padaria.
 export function LogoPadaria({ className }: { className?: string }) {
-  const logo = usePadaria().data?.logo ?? null
+  const padaria = usePadaria().data
+  const logo = padaria?.logo ?? null
+  const nome = padaria?.nome_fantasia?.trim() || null
+
+  // Título da aba: o nome da padaria enquanto a pessoa está no sistema (no login, "Coffee Break").
+  useEffect(() => {
+    if (!nome) return
+    const original = document.title
+    document.title = nome
+    return () => {
+      document.title = original
+    }
+  }, [nome])
 
   useEffect(() => {
     const icone = document.querySelector<HTMLLinkElement>('link[rel="icon"]')

@@ -356,7 +356,7 @@ export async function pdfComprovante(c: Comprovante) {
     add('\nendstream')
   })
   objeto(() => add(`<< /Length ${desenho.length} >>\nstream\n${desenho}\nendstream`))
-  objeto(() => add(`<< /Title (Comprovante ${numeroComprovante(c)}) /Producer (Padaria Info) >>`))
+  objeto(() => add(`<< /Title (Comprovante ${numeroComprovante(c)}) /Producer (Coffee Break) >>`))
 
   const inicioXref = tamanho
   add(`xref\n0 ${posicoes.length + 1}\n0000000000 65535 f \n`)

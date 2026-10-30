@@ -42,7 +42,7 @@ export function LogoPicker({
         <h2 className="font-heading text-lg font-semibold">Logo da padaria</h2>
         <p className="text-sm text-muted-foreground">
           Aparece no menu, no comprovante e no ícone da aba do navegador. Sem logo, fica o pãozinho
-          do Padaria Info.
+          do Coffee Break.
         </p>
       </div>
       <div className="flex flex-wrap gap-2">

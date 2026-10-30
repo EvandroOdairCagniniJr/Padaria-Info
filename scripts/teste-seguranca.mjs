@@ -136,7 +136,7 @@ const vendaA = (await api('POST', '/vendas', {
   corpo: { itens: [{ produto_id: produtoA, quantidade: 1 }], forma_pagamento: 'pix' },
 })).json?.id
 
-console.log('🔒 Teste de segurança do Padaria Info (banco temporário, dados fictícios)')
+console.log('🔒 Teste de segurança do Coffee Break (banco temporário, dados fictícios)')
 
 // ------------------------------------------------------------------ 1. sem login
 titulo('1. Acesso sem login')

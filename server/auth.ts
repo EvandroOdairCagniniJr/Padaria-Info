@@ -287,7 +287,7 @@ authRouter.post('/esqueci-senha', async (req, res) => {
            expira_em = excluded.expira_em, tentativas = 0, created_at = now()`,
         [u.id, hashCodigo(u.id, codigo)],
       )
-      const padaria = (await lerPadaria(u.padaria_id))?.nome_fantasia || 'Padaria Info'
+      const padaria = (await lerPadaria(u.padaria_id))?.nome_fantasia || 'Coffee Break'
       try {
         await enviarCodigoSenha(u.email, u.nome, codigo, padaria)
         await registrarAcesso(req, 'codigo_enviado', { padariaId: u.padaria_id, usuarioId: u.id, email: u.email })

@@ -2,6 +2,8 @@
 # O banco é o PostgreSQL do Supabase; preencha as variáveis marcadas com sync: false.
 services:
   - type: web
+    # Nome técnico do serviço no Render (dá o endereço padaria-info.onrender.com). O sistema se
+    # chama Coffee Break; não renomeie aqui, ou o Render criaria outro serviço.
     name: padaria-info
     runtime: node
     plan: free

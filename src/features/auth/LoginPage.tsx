@@ -271,7 +271,7 @@ export function LoginPage() {
       <div className="w-full max-w-sm space-y-6 rounded-2xl border bg-card/95 p-8 shadow-xl shadow-amber-900/10">
         <div className="space-y-2 text-center">
           <LogoPao className="mx-auto size-16 rounded-2xl shadow-md" />
-          <h1 className="font-heading text-3xl font-semibold tracking-tight">Padaria Info</h1>
+          <h1 className="font-heading text-3xl font-semibold tracking-tight">Coffee Break</h1>
           <p className="text-sm text-muted-foreground">
             {modo === 'entrar' || modo === 'esqueci'
               ? 'Gestão completa para a sua padaria'
@@ -337,7 +337,7 @@ export function LoginPage() {
                 <OpcaoConta
                   icone={Users}
                   titulo="Entrar na equipe de uma padaria"
-                  texto="Trabalho numa padaria que já usa o Padaria Info."
+                  texto="Trabalho numa padaria que já usa o Coffee Break."
                   onClick={() => setModo('equipe')}
                 />
               </div>

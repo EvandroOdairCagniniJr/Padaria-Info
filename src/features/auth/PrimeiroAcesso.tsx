@@ -125,7 +125,7 @@ export function PrimeiroAcesso({ onVoltar }: { onVoltar?: () => void }) {
           <div className="flex items-center gap-3">
             <LogoPao className="size-11" />
             <div>
-              <h1 className="text-2xl font-semibold tracking-tight">Bem-vindo ao Padaria Info</h1>
+              <h1 className="text-2xl font-semibold tracking-tight">Bem-vindo ao Coffee Break</h1>
               <p className="text-sm text-muted-foreground">
                 Cadastre sua padaria e crie a conta do dono. Leva menos de 2 minutos.
               </p>

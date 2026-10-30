@@ -1,4 +1,4 @@
-// Cliente da API do servidor Padaria Info (server/). O login fica num cookie httpOnly,
+// Cliente da API do servidor Coffee Break (server/). O login fica num cookie httpOnly,
 // enviado automaticamente pelo navegador.
 
 export class ApiError extends Error {

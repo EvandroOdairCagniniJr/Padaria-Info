@@ -1,4 +1,4 @@
-// Servidor do Padaria Info: API em /api e o site (pasta dist) no mesmo endereço.
+// Servidor do Coffee Break: API em /api e o site (pasta dist) no mesmo endereço.
 // Rodar com `npm start` (gera o build e sobe o servidor) ou `npm run server`.
 import { existsSync } from 'node:fs'
 import { networkInterfaces } from 'node:os'
@@ -98,7 +98,7 @@ if (existsSync(dist)) {
 // Sem host = IPv4 e IPv6. Escutar só em 0.0.0.0 fazia o navegador tentar o IPv6 de
 // "localhost" primeiro e esperar ~200 ms (ou segundos) em cada conexão no Windows.
 app.listen(port, () => {
-  console.log(`\nPadaria Info rodando em http://localhost:${port}`)
+  console.log(`\nCoffee Break rodando em http://localhost:${port}`)
   const ips = Object.values(networkInterfaces())
     .flat()
     .filter((i) => i && i.family === 'IPv4' && !i.internal)

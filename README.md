@@ -1,15 +1,15 @@
 <div align="center">
 
-<img src="public/favicon.svg" alt="Padaria Info" width="96" height="96" />
+<img src="public/favicon.svg" alt="Coffee Break" width="96" height="96" />
 
-# Padaria Info
+# Coffee Break
 
 **Gestão completa para padarias — do balcão ao forno, do estoque ao caixa.**
 
 Um sistema web pensado para o dia a dia real de uma padaria: rápido no balcão,
 claro para a equipe e confiável para quem cuida do negócio.
 
-[![Release](https://img.shields.io/github/v/release/EvandroOdairCagniniJr/Padaria-Info?color=b9772f&label=vers%C3%A3o)](https://github.com/EvandroOdairCagniniJr/Padaria-Info/releases)
+[![Release](https://img.shields.io/github/v/release/EvandroOdairCagniniJr/Coffee-Break?color=b9772f&label=vers%C3%A3o)](https://github.com/EvandroOdairCagniniJr/Coffee-Break/releases)
 ![React](https://img.shields.io/badge/React-19-5a3a22?logo=react&logoColor=white)
 ![TypeScript](https://img.shields.io/badge/TypeScript-6-5a3a22?logo=typescript&logoColor=white)
 ![Node.js](https://img.shields.io/badge/Node.js-Express-5a3a22?logo=nodedotjs&logoColor=white)
@@ -19,13 +19,13 @@ claro para a equipe e confiável para quem cuida do negócio.
 [Perfis de acesso](#-perfis-de-acesso) ·
 [Como rodar](#-como-rodar) ·
 [Arquitetura](#-arquitetura) ·
-[Novidades](https://github.com/EvandroOdairCagniniJr/Padaria-Info/releases)
+[Novidades](https://github.com/EvandroOdairCagniniJr/Coffee-Break/releases)
 
 </div>
 
 ---
 
-## ✨ Por que o Padaria Info
+## ✨ Por que o Coffee Break
 
 - **Feito para o balcão.** O PDV registra uma venda em poucos toques e já dá baixa no estoque.
 - **Cada um vê o que usa.** Dono, gerente e funcionário têm telas e permissões próprias,
@@ -133,7 +133,7 @@ O repositório já traz o [`render.yaml`](render.yaml) para o [Render](https://r
 4. Pronto: o Render gera o build, cria as tabelas no banco e publica com HTTPS.
 
 > As tabelas ficam no schema `padaria`, **fora da API pública** do Supabase, e com RLS ligado:
-> só o servidor do Padaria Info acessa os dados. Tem uma instalação antiga em MySQL?
+> só o servidor do Coffee Break acessa os dados. Tem uma instalação antiga em MySQL?
 > `npm run migrar:mysql` copia tudo para o PostgreSQL.
 
 ## 🔐 Segurança
@@ -192,7 +192,7 @@ src/lib/              utilitários (formatação, documentos, imagens, permissõ
 
 ## 🗺️ Novidades
 
-Cada versão é publicada em [**Releases**](https://github.com/EvandroOdairCagniniJr/Padaria-Info/releases),
+Cada versão é publicada em [**Releases**](https://github.com/EvandroOdairCagniniJr/Coffee-Break/releases),
 com o que mudou e o que é preciso configurar.
 
 ---
