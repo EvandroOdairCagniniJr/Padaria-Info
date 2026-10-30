@@ -179,12 +179,13 @@
    fundo, como a casca do pão: some no menu em vez de aparecer clara. */
 .rolagem-menu {
   scrollbar-width: thin;
-  scrollbar-color: var(--sidebar-border) var(--sidebar);
+  /* Pegador dourado (casca de pão, como o item ativo do menu) sobre a trilha chocolate. */
+  scrollbar-color: oklch(0.72 0.11 72) var(--sidebar);
 }
 .rolagem-menu::-webkit-scrollbar { width: 8px; }
 .rolagem-menu::-webkit-scrollbar-track { background: var(--sidebar); }
 .rolagem-menu::-webkit-scrollbar-thumb {
-  background: var(--sidebar-border);
+  background: oklch(0.72 0.11 72);
   border-radius: 999px;
   border: 2px solid var(--sidebar);
 }
