@@ -255,6 +255,15 @@
 }
 .total-pulso { display: inline-block; animation: total-pulso 0.38s ease-out; }
 
+/* Contador do cartão no PDV: só cresce e volta. Não mexe em display (a bolinha é flex e
+   centraliza o número) nem na cor (o número continua claro sobre o marrom). */
+@keyframes contador-pulso {
+  0% { transform: scale(0.6); }
+  60% { transform: scale(1.18); }
+  100% { transform: scale(1); }
+}
+.contador-pulso { animation: contador-pulso 0.32s ease-out; }
+
 /* Venda concluída: fundo, cartão, check desenhado e pães estourando. */
 @keyframes venda-fundo { from { opacity: 0; } }
 @keyframes venda-cartao {
@@ -317,7 +326,7 @@
 .conta-anel { animation: conta-anel 0.6s ease-out forwards; }
 
 @media (prefers-reduced-motion: reduce) {
-  .tela-entra, .barra-enche, .barra-sobe, .total-pulso, .venda-fundo, .venda-cartao, .venda-circulo,
+  .tela-entra, .barra-enche, .barra-sobe, .total-pulso, .contador-pulso, .venda-fundo, .venda-cartao, .venda-circulo,
   .venda-onda, .venda-particula, .venda-meta, .conta-pulo, .conta-anel {
     animation: none;
   }

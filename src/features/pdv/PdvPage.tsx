@@ -461,7 +461,7 @@ export function PdvPage() {
                     )}
                   >
                     {item.noCarrinho > 0 && (
-                      <span className="absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground">
+                      <span className="absolute top-2 right-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold whitespace-nowrap text-primary-foreground tabular-nums shadow-sm">
                         {formatQuantidade(item.noCarrinho)}
                       </span>
                     )}
@@ -951,7 +951,7 @@ function CartaoProduto({
       {noCarrinho ? (
         <span
           key={noCarrinho}
-          className="total-pulso absolute top-2 right-2 flex size-6 items-center justify-center rounded-full bg-primary text-xs font-semibold text-primary-foreground"
+          className="contador-pulso absolute top-2 right-2 flex h-6 min-w-6 items-center justify-center rounded-full bg-primary px-1.5 text-xs font-semibold whitespace-nowrap text-primary-foreground tabular-nums shadow-sm"
         >
           {formatQuantidade(noCarrinho)}
         </span>
