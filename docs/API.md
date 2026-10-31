@@ -57,7 +57,7 @@
 | GET | `/api/margens` | dono, gerente |  | [margens.ts:62](../server/margens.ts#L62) |
 | PUT | `/api/margens/alvo` | dono |  | [margens.ts:125](../server/margens.ts#L125) |
 | GET | `/api/metas` | todos logados |  | [metas.ts:55](../server/metas.ts#L55) |
-| PUT | `/api/metas` | dono | Dono define as metas de um alvo de uma vez; null remove a meta daquele período. | [metas.ts:122](../server/metas.ts#L122) |
+| PUT | `/api/metas` | dono | Dono define as metas de um alvo de uma vez; null remove a meta daquele período. | [metas.ts:138](../server/metas.ts#L138) |
 | GET | `/api/padaria` | todos logados |  | [padaria.ts:12](../server/padaria.ts#L12) |
 | PUT | `/api/padaria` | dono |  | [padaria.ts:16](../server/padaria.ts#L16) |
 | GET | `/api/padaria/convite` | dono | Código que o funcionário informa em "Criar conta" para pedir acesso a esta padaria. | [padaria.ts:23](../server/padaria.ts#L23) |

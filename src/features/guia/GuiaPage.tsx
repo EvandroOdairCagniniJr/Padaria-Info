@@ -585,7 +585,20 @@ export function GuiaPage() {
           <Input
             id="guia-busca"
             value={busca}
-            onChange={(e) => setBusca(e.target.value)}
+            onChange={(e) => {
+              const texto = e.target.value
+              setBusca(texto)
+              // Ao procurar, o primeiro guia encontrado já abre; os outros abrem e fecham no clique.
+              const t = semAcento(texto.trim())
+              const primeiro = t
+                ? doPapel.find(
+                    (g) =>
+                      (categoria === 'todas' || g.categoria === categoria) &&
+                      semAcento([g.titulo, g.resumo, ...g.passos, ...g.dicas].join(' ')).includes(t),
+                  )
+                : undefined
+              setAberto(primeiro?.id ?? null)
+            }}
             placeholder='Procure uma dúvida: "troco", "senha", "bolo", "promoção"...'
             className="pl-9"
             aria-label="Procurar no guia"
@@ -618,7 +631,7 @@ export function GuiaPage() {
           </p>
         )}
         {visiveis.map((guia) => {
-          const estaAberto = aberto === guia.id || (termo !== '' && visiveis.length <= 3)
+          const estaAberto = aberto === guia.id
           const aprendeu = aprendidos.has(guia.id)
           return (
             <article
