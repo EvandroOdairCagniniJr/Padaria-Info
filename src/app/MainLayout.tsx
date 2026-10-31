@@ -25,7 +25,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom'
 import { cn } from '@/lib/utils'
 import { BoasVindas } from '@/app/BoasVindas'
 import { Avatar } from '@/components/Avatar'
-import { LogoPadaria } from '@/components/LogoPao'
+import { LogoPadaria, LogoPao } from '@/components/LogoPao'
 import { usePadaria } from '@/features/padaria/api'
 import { PerfilDialog } from '@/features/auth/PerfilDialog'
 import { useNovidadesNaoVistas } from '@/features/equipe/Novidades'
@@ -89,17 +89,29 @@ const secoes: { titulo: string | null; itens: ItemMenu[] }[] = [
 ]
 
 // Topo do menu: a logo e o nome cadastrados em "Minha padaria" (sem logo, o pão do sistema).
-function Logo() {
+function Logo({ assinatura = true }: { assinatura?: boolean }) {
   const padaria = usePadaria()
-  const nome = padaria.data?.nome_fantasia || (padaria.isLoading ? '' : 'Coffee Break')
+  const nomePadaria = padaria.data?.nome_fantasia?.trim()
+  const nome = nomePadaria || (padaria.isLoading ? '' : 'Coffee Break')
   return (
-    <div className="flex min-w-0 items-center gap-2.5">
-      <LogoPadaria />
-      <div className="min-w-0 font-heading text-lg leading-tight font-semibold">
-        <span className="line-clamp-2 break-words" title={nome}>
-          {nome}
-        </span>
+    <div className="min-w-0">
+      <div className="flex min-w-0 items-center gap-2.5">
+        <LogoPadaria />
+        <div className="min-w-0 font-heading text-lg leading-tight font-semibold">
+          <span className="line-clamp-2 break-words" title={nome}>
+            {nome}
+          </span>
+        </div>
       </div>
+      {/* Assinatura do sistema, discreta: a padaria fica em destaque, o Coffee Break em segundo plano. */}
+      {assinatura && nomePadaria && (
+        <div className="mt-2 flex items-center gap-1.5 pl-0.5 text-[11px] leading-none text-sidebar-foreground/55">
+          <LogoPao className="size-4 rounded-[5px] shadow-none" />
+          <span>
+            com <span className="font-medium text-sidebar-foreground/75">Coffee Break</span>
+          </span>
+        </div>
+      )}
     </div>
   )
 }
@@ -220,7 +232,7 @@ export function MainLayout() {
     <div className="flex h-svh flex-col md:flex-row">
       {/* Telas pequenas: barra no topo com botão de menu */}
       <header className="flex items-center justify-between bg-sidebar px-4 py-2.5 text-sidebar-foreground md:hidden">
-        <Logo />
+        <Logo assinatura={false} />
         <button
           type="button"
           onClick={() => setMenuAberto(true)}
