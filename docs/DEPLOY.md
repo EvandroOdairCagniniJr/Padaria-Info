@@ -10,7 +10,7 @@ Endereço: https://padaria-info.onrender.com · Painel: Render → serviço `pad
 - [ ] `npx tsc -b`: sem erros de tipo.
 - [ ] `npx oxlint`: sem **erros** (avisos de fast refresh já conhecidos podem ficar).
 - [ ] `npm run build`: o site compila.
-- [ ] `npm run teste:seguranca`: **45 de 45**. É o teste de regressão de segurança, e roda num banco temporário.
+- [ ] `npm run teste`: **110 de 110** (65 funcionais + 45 de segurança), num banco temporário. A **Checagem** do GitHub roda o mesmo a cada push: confira se ficou verde.
 - [ ] `npm audit --omit=dev`: 0 vulnerabilidades no que vai para produção.
 - [ ] Mexeu em tela? Confira num servidor de demonstração (banco em memória, dados fictícios) ou no `npm run dev` com o banco local.
 
