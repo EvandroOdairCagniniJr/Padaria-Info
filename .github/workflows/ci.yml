@@ -1,0 +1,40 @@
+# Checagem automática a cada envio para a main e a cada pull request: tipos, lint, build e os
+# 110 testes (funcional + segurança). Os testes usam banco temporário em memória: não tocam no
+# Supabase e não precisam de senha nenhuma. Grátis em repositório público.
+name: Checagem
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: checagem-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  checar:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - name: Instalar dependências
+        run: npm ci
+      - name: Tipos
+        run: npx tsc -b
+      - name: Lint
+        run: npx oxlint
+      - name: Build
+        run: npm run build
+      - name: Testes (funcional + segurança)
+        run: npm run teste
+      - name: Vulnerabilidades em produção
+        run: npm audit --omit=dev --audit-level=high

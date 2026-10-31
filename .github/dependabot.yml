@@ -1,0 +1,20 @@
+# Atualizações automáticas de segurança e de versões (Dependabot, grátis). Toda semana, em
+# poucos pull requests agrupados; a Checagem (ci.yml) roda os 110 testes em cada um antes de
+# qualquer merge.
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+      time: '06:00'
+      timezone: America/Sao_Paulo
+    open-pull-requests-limit: 5
+    groups:
+      correcoes-e-melhorias:
+        update-types: [minor, patch]
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: monthly
