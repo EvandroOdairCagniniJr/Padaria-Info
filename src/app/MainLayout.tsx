@@ -103,12 +103,12 @@ function Logo({ assinatura = true }: { assinatura?: boolean }) {
           </span>
         </div>
       </div>
-      {/* Assinatura do sistema, discreta: a padaria fica em destaque, o Coffee Break em segundo plano. */}
+      {/* Assinatura do sistema: cor cheia, só menor. A padaria fica em destaque; o Coffee Break em segundo. */}
       {assinatura && nomePadaria && (
-        <div className="mt-2 flex items-center gap-1.5 pl-0.5 text-[11px] leading-none text-sidebar-foreground/55">
-          <LogoPao className="size-4 rounded-[5px] shadow-none" />
+        <div className="mt-2 flex items-center gap-1.5 pl-0.5 text-xs leading-none text-sidebar-foreground">
+          <LogoPao className="size-5 rounded-md shadow-none" />
           <span>
-            com <span className="font-medium text-sidebar-foreground/75">Coffee Break</span>
+            com <span className="font-semibold">Coffee Break</span>
           </span>
         </div>
       )}
